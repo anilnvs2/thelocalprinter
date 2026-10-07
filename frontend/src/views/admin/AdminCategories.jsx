@@ -487,7 +487,7 @@ const AdminCategories = () => {
                               </div>
                             )}
                             <div className="min-w-0">
-                              <p className="font-medium">
+                              <div className="font-medium">
                                 <Link
                                   href={`/categories/${cat.slug}`}
                                   target="_blank"
@@ -503,7 +503,7 @@ const AdminCategories = () => {
                                     Staffing
                                   </Badge>
                                 )}
-                              </p>
+                              </div>
                               {cat.services && cat.services.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mt-1 md:hidden">
                                   {cat.services.map((sub) => (

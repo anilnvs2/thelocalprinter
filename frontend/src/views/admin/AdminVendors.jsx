@@ -259,7 +259,7 @@ const AdminVendors = () => {
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search vendors..."
+                placeholder="Search vendor or business name..."
                 value={search}
                 onChange={handleSearchChange}
                 onSubmit={handleSearchSubmit}
@@ -316,15 +316,39 @@ const AdminVendors = () => {
                         {v.phone || "-"}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className="font-mono cursor-pointer transition-colors hover:bg-primary/15 hover:text-primary"
-                          title={`View businesses of ${v.fullName}`}
-                          onClick={() => handleShowBusinesses(v)}
-                        >
-                          <Building2 className="mr-1 h-3 w-3" />
-                          {v.businessCount}
-                        </Badge>
+                        <div className="flex flex-col items-start gap-1.5">
+                          <Badge
+                            variant="secondary"
+                            className="font-mono cursor-pointer transition-colors hover:bg-primary/15 hover:text-primary"
+                            title={
+                              v.businessNames?.length
+                                ? v.businessNames.join(", ")
+                                : `View businesses of ${v.fullName}`
+                            }
+                            onClick={() => handleShowBusinesses(v)}
+                          >
+                            <Building2 className="mr-1 h-3 w-3" />
+                            {v.businessCount}
+                          </Badge>
+                          {v.businessNames?.length > 0 && (
+                            <div className="max-w-[190px] space-y-0.5">
+                              {v.businessNames.slice(0, 3).map((name, idx) => (
+                                <p
+                                  key={idx}
+                                  className="truncate text-[11px] leading-tight text-muted-foreground"
+                                  title={name}
+                                >
+                                  {name}
+                                </p>
+                              ))}
+                              {v.businessNames.length > 3 && (
+                                <p className="text-[11px] leading-tight text-muted-foreground">
+                                  +{v.businessNames.length - 3} more
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         <StatusBadge status={v.approvalStatus || "pending"} />

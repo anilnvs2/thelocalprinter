@@ -158,10 +158,17 @@ exports.getVendors = async (req, res) => {
 
     const query = { role: ROLES.VENDOR };
     if (search) {
+      const matchingBusinesses = await Business.find({
+        name: { $regex: search, $options: "i" },
+      })
+        .select("vendor")
+        .lean();
+      const matchedVendorIds = matchingBusinesses.map((b) => b.vendor);
       query.$or = [
         { fullName: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { publicId: { $regex: search, $options: "i" } },
+        { _id: { $in: matchedVendorIds } },
       ];
     }
 
@@ -175,20 +182,30 @@ exports.getVendors = async (req, res) => {
     ]);
 
     const vendorIds = vendors.map((v) => v._id);
-    const businessCounts = await Business.aggregate([
+    const businessStats = await Business.aggregate([
       { $match: { vendor: { $in: vendorIds } } },
-      { $group: { _id: "$vendor", count: { $sum: 1 } } },
+      {
+        $group: {
+          _id: "$vendor",
+          count: { $sum: 1 },
+          names: { $push: "$name" },
+        },
+      },
     ]);
 
-    const countMap = {};
-    businessCounts.forEach((b) => {
-      countMap[b._id.toString()] = b.count;
+    const statMap = {};
+    businessStats.forEach((b) => {
+      statMap[b._id.toString()] = b;
     });
 
-    const vendorsWithCount = vendors.map((v) => ({
-      ...v.toObject(),
-      businessCount: countMap[v._id.toString()] || 0,
-    }));
+    const vendorsWithCount = vendors.map((v) => {
+      const stat = statMap[v._id.toString()];
+      return {
+        ...v.toObject(),
+        businessCount: stat ? stat.count : 0,
+        businessNames: stat ? stat.names : [],
+      };
+    });
 
     res.status(200).json({
       success: true,
