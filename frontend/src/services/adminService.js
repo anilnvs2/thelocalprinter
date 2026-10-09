@@ -217,6 +217,11 @@ export const deleteResellerApplication = async (id) => {
   return response.data;
 };
 
+export const approveResellerApplication = async (id) => {
+  const response = await api.patch(`/admin/reseller-applications/${id}/approve`);
+  return response.data;
+};
+
 // ─── Reviews ───
 
 export const getAdminReviews = async (page = 1, search = "") => {

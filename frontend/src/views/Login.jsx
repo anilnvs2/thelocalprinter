@@ -65,18 +65,6 @@ const Login = () => {
               style={{ maxHeight: "260px", objectFit: "contain" }}
             />
           </div>
-          <div className="mt-8 grid grid-cols-3 gap-6 text-center">
-            {[
-              { num: "500+", label: "Printers" },
-              { num: "10K+", label: "Orders" },
-              { num: "4.8", label: "Rating" },
-            ].map((s) => (
-              <div key={s.label} className="bg-white/5 rounded-xl px-5 py-4 backdrop-blur-sm border border-white/10">
-                <div className="text-2xl font-bold text-white">{s.num}</div>
-                <div className="text-xs text-slate-400 mt-1">{s.label}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 

@@ -18,6 +18,17 @@ const filterUser = (user) => {
   return obj;
 };
 
+const PAYMENT_RULES = ["Cash & Carry", "PO Based"];
+
+// Accepts the legacy single value or the current multi-select array and
+// returns every valid selected rule.
+const normalizePaymentRule = (value) => {
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .filter((rule) => typeof rule === "string" && PAYMENT_RULES.includes(rule.trim()))
+    .map((rule) => rule.trim());
+};
+
 exports.signup = async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -95,7 +106,7 @@ exports.signup = async (req, res) => {
         contactNumber: businessPurposeDetails.contactNumber || "",
         officialEmail: businessPurposeDetails.officialEmail || "",
         gstNumber: businessPurposeDetails.gstNumber || "",
-        paymentRule: businessPurposeDetails.paymentRule || "",
+        paymentRule: normalizePaymentRule(businessPurposeDetails.paymentRule),
       };
     }
 
@@ -146,11 +157,13 @@ exports.signup = async (req, res) => {
         locationVideoPath,
         businessCardPath,
         isAlreadyListed,
-        status: "APPROVED",
+        status: "PENDING",
       });
       await resellerApp.save();
 
-      user.resellerApprovalStatus = "APPROVED";
+      // Resellers are never auto-approved: the application waits for the admin
+      // (Admin Dashboard -> Businesses) to approve it manually.
+      user.resellerApprovalStatus = "PENDING";
       await user.save();
     }
 

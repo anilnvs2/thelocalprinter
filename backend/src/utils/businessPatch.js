@@ -56,6 +56,7 @@ const applyBusinessPatch = (target, data) => {
 
   // Section 13
   if (data.returnReplacementPolicy !== undefined) target.returnReplacementPolicy = data.returnReplacementPolicy;
+  if (data.replaceMistakesAtNoCharge !== undefined) target.replaceMistakesAtNoCharge = data.replaceMistakesAtNoCharge;
   if (data.inHouseDesignerAvailable !== undefined) target.inHouseDesignerAvailable = data.inHouseDesignerAvailable;
   if (data.customerLocationVisitAvailable !== undefined) target.customerLocationVisitAvailable = data.customerLocationVisitAvailable;
   if (data.addonServices !== undefined) target.addonServices = data.addonServices;

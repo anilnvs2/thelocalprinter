@@ -41,6 +41,7 @@ const run = async () => {
     email: "debug@test.com",
     password: "Debug@123",
     role: "USER",
+    whatsappNumber: "9876543210",
   });
   console.log("Status:", res.status);
   console.log("Body:", JSON.stringify(res.body, null, 2));

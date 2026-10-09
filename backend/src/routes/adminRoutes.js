@@ -32,6 +32,7 @@ const {
   getResellerApplications,
   getResellerApplicationById,
   deleteResellerApplication,
+  approveResellerApplication,
   updateUserApprovalStatus,
   updateProfileChangeStatus,
   getPendingApprovalsCount,
@@ -97,6 +98,7 @@ router.put("/settings", updateSettings);
 
 router.get("/reseller-applications", getResellerApplications);
 router.get("/reseller-applications/:id", getResellerApplicationById);
+router.patch("/reseller-applications/:id/approve", approveResellerApplication);
 router.delete("/reseller-applications/:id", deleteResellerApplication);
 
 module.exports = router;

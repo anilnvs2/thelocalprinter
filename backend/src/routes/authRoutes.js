@@ -35,6 +35,26 @@ const verifyOtpValidation = [
     .withMessage("OTP must contain only numbers"),
 ];
 
+// WhatsApp number is mandatory for USER registrations (Personal Use, Business
+// Purpose and Reseller) and for Vendor registrations. Poster boy sign-ups keep
+// it optional.
+const whatsappValidation = body("whatsappNumber").custom((value, { req }) => {
+  if (req.body.role !== "USER" && req.body.role !== "VENDOR") return true;
+
+  const whatsapp = (value === undefined || value === null ? "" : String(value)).trim();
+  if (!whatsapp) {
+    throw new Error("WhatsApp number is required");
+  }
+  if (!/^\+?[\d\s\-()]+$/.test(whatsapp)) {
+    throw new Error("Please provide a valid WhatsApp number");
+  }
+  const digits = whatsapp.replace(/\D/g, "");
+  if (digits.length < 7 || digits.length > 15) {
+    throw new Error("Please provide a valid WhatsApp number");
+  }
+  return true;
+});
+
 const signupValidation = [
   body("fullName")
     .trim()
@@ -59,6 +79,7 @@ const signupValidation = [
     .withMessage("Account type is required")
     .isIn(["USER", "VENDOR", "POSTER_BOY"])
     .withMessage("Account type must be USER, VENDOR or POSTER_BOY"),
+  whatsappValidation,
 ];
 
 const loginValidation = [
@@ -83,7 +104,7 @@ const normalizeSignupEmail = (req, res, next) => {
   next();
 };
 
-router.post("/signup", resellerUpload, normalizeSignupEmail, signup);
+router.post("/signup", resellerUpload, normalizeSignupEmail, [whatsappValidation], signup);
 router.post("/signup-json", signupValidation, signup);
 router.post("/login", loginValidation, login);
 router.get("/me", authenticateUser, getMe);

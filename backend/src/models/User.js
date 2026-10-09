@@ -69,9 +69,11 @@ const userSchema = new mongoose.Schema(
       officialEmail: { type: String, trim: true, default: "" },
       gstNumber: { type: String, trim: true, default: "" },
       paymentRule: {
-        type: String,
+        // Multiple payment rules can be selected (Cash & Carry + PO Based).
+        // "" is kept in the enum so legacy single-value records still validate.
+        type: [String],
         enum: ["Cash & Carry", "PO Based", ""],
-        default: "",
+        default: [],
       },
     },
     resellerApprovalStatus: {

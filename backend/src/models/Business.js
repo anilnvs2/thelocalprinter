@@ -216,6 +216,15 @@ const businessSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    // Client question: "If any mistakes happen from your end, after approval
+    // of the customer will you replace them on with no charge?"
+    // Stored separately from the free-text policy above. null = not answered
+    // (records created before this question was added keep their data).
+    replaceMistakesAtNoCharge: {
+      type: String,
+      enum: ["Yes", "No"],
+      default: null,
+    },
     inHouseDesignerAvailable: {
       type: Boolean,
       default: false,

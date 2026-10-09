@@ -87,6 +87,7 @@ test("User signup creates account", async () => {
     email: "shopper@test.com",
     password: "User@123456",
     role: "USER",
+    whatsappNumber: "9876543210",
   });
   assert(res.status === 201, "status 201");
   assert(res.body.data.user.role === "USER", "role is USER");
@@ -207,6 +208,7 @@ test("passwordHash never returned in signup response", async () => {
     email: "hashcheck@test.com",
     password: "Hash@12345",
     role: "USER",
+    whatsappNumber: "9876543210",
   });
   assert(res.status === 201, "status 201");
   assert(!res.body.data.user.passwordHash, "passwordHash not in response");

@@ -6,6 +6,7 @@ const Settings = require("../models/Settings");
 const ResellerApplication = require("../models/ResellerApplication");
 const { ROLES } = require("../utils/constants");
 const { applyBusinessPatch } = require("../utils/businessPatch");
+const { validatePrintShopSelection } = require("../utils/businessValidation");
 
 // ─── Dashboard ───
 
@@ -493,6 +494,15 @@ exports.adminUpdateBusiness = async (req, res) => {
     }
 
     const data = req.body;
+
+    const printShopErrors = await validatePrintShopSelection(data, business);
+    if (printShopErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: printShopErrors.join(" "),
+        errors: printShopErrors,
+      });
+    }
 
     if (data.name !== undefined) business.name = data.name.trim();
     if (data.description !== undefined) business.description = data.description;
@@ -1427,6 +1437,58 @@ exports.deleteResellerApplication = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error deleting reseller application",
+    });
+  }
+};
+
+// Manual approval of a reseller application (Admin Dashboard -> Businesses).
+// The existing user account is updated in place: no second account is created.
+exports.approveResellerApplication = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const application = await ResellerApplication.findById(id);
+    if (!application) {
+      return res.status(404).json({
+        success: false,
+        message: "Reseller application not found",
+      });
+    }
+
+    if (application.status === "APPROVED") {
+      return res.status(400).json({
+        success: false,
+        message: "Reseller application is already approved",
+      });
+    }
+
+    application.status = "APPROVED";
+    await application.save();
+
+    let user = null;
+    if (application.user) {
+      user = await User.findByIdAndUpdate(
+        application.user,
+        {
+          registrationType: "RESELLER",
+          resellerApprovalStatus: "APPROVED",
+        },
+        { new: true }
+      ).select(
+        "fullName email publicId role registrationType approvalStatus resellerApprovalStatus isActive"
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Reseller application approved",
+      data: { application, user },
+    });
+  } catch (error) {
+    console.error("approveResellerApplication error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error approving reseller application",
     });
   }
 };

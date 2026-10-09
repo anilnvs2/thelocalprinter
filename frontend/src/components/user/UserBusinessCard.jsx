@@ -34,7 +34,13 @@ const ORDER_LIMIT_LABELS = {
 const ORDERING_METHOD_LABELS = {
   on_call: "On Call",
   shop_visit: "Shop Visit",
-  both: "Call / Visit",
+  both: "On Call and Shop Visit",
+};
+
+const CUSTOMER_TYPE_LABELS = {
+  b2b: "B2B",
+  b2c: "B2C",
+  both: "B2B and B2C",
 };
 
 /**
@@ -232,9 +238,9 @@ const UserBusinessCard = ({
                 {SERVICE_TYPE_LABELS[b.serviceType]}
               </Badge>
             )}
-            {b.customerType && (
+            {b.customerType && CUSTOMER_TYPE_LABELS[b.customerType] && (
               <Badge variant="outline" className="text-[10px]">
-                {String(b.customerType).toUpperCase()}
+                {CUSTOMER_TYPE_LABELS[b.customerType]}
               </Badge>
             )}
             {b.orderingMethod && ORDERING_METHOD_LABELS[b.orderingMethod] && (

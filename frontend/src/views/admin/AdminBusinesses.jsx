@@ -20,6 +20,8 @@ import {
   deleteBusiness,
   toggleBusinessStatus,
   updateBusinessStatus,
+  getResellerApplications,
+  approveResellerApplication,
 } from "../../services/adminService";
 import BusinessViewDialog from "./BusinessViewDialog";
 import { PageHeader } from "../../components/shared/page-header";
@@ -78,7 +80,19 @@ const AdminBusinesses = () => {
   const [viewTarget, setViewTarget] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [pendingResellers, setPendingResellers] = useState([]);
+  const [resellerConfirm, setResellerConfirm] = useState(null);
+  const [resellerLoading, setResellerLoading] = useState(false);
   const debounceRef = useRef(null);
+
+  const fetchPendingResellers = async () => {
+    try {
+      const res = await getResellerApplications(1, "", "PENDING");
+      setPendingResellers(res.data.applications || []);
+    } catch {
+      setPendingResellers([]);
+    }
+  };
 
   const fetchBusinesses = async (p = 1, s = "", st = "") => {
     setLoading(true);
@@ -97,6 +111,25 @@ const AdminBusinesses = () => {
   useEffect(() => {
     fetchBusinesses(page, search, statusFilter === "all" ? "" : statusFilter);
   }, [page, statusFilter]);
+
+  useEffect(() => {
+    fetchPendingResellers();
+  }, []);
+
+  const handleApproveReseller = async () => {
+    if (!resellerConfirm) return;
+    try {
+      setResellerLoading(true);
+      setError("");
+      await approveResellerApplication(resellerConfirm._id);
+      setPendingResellers((prev) => prev.filter((a) => a._id !== resellerConfirm._id));
+      setResellerConfirm(null);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to approve reseller application");
+    } finally {
+      setResellerLoading(false);
+    }
+  };
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
@@ -224,6 +257,61 @@ const AdminBusinesses = () => {
             Dismiss
           </Button>
         </div>
+      )}
+
+      {pendingResellers.length > 0 && (
+        <Card>
+          <CardContent className="p-0">
+            <div className="border-b px-6 py-4">
+              <h2 className="text-sm font-semibold text-foreground">
+                Pending Reseller Applications
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Reseller sign-ups stay pending until they are approved here.
+              </p>
+            </div>
+            <div className="divide-y">
+              {pendingResellers.map((a) => (
+                <div
+                  key={a._id}
+                  className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback className="bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 text-xs font-semibold">
+                        {getInitials(a.user?.fullName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{a.user?.fullName || "Unknown"}</p>
+                      <p className="truncate text-sm text-muted-foreground">{a.user?.email || ""}</p>
+                      <CopyableId id={a.user?.publicId} />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:justify-end">
+                    <span className="text-xs text-muted-foreground">
+                      Registration Type:{" "}
+                      <Badge variant="secondary" className="font-normal">
+                        RESELLER
+                      </Badge>
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Status: <StatusBadge status="pending" />
+                    </span>
+                    <Button
+                      size="sm"
+                      className="h-8 gap-1"
+                      onClick={() => setResellerConfirm(a)}
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      Approve
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <Card>
@@ -602,6 +690,36 @@ const AdminBusinesses = () => {
             >
               {confirmLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {confirmAction?.action === "approve" ? "Approve" : "Reject"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approve Reseller Dialog */}
+      <Dialog
+        open={!!resellerConfirm}
+        onOpenChange={(open) => !open && setResellerConfirm(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Approve Reseller</DialogTitle>
+            <DialogDescription>
+              Approve the reseller application from{" "}
+              <strong>{resellerConfirm?.user?.fullName}</strong>? The same account
+              becomes an approved Reseller.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setResellerConfirm(null)}
+              disabled={resellerLoading}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleApproveReseller} disabled={resellerLoading}>
+              {resellerLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Approve
             </Button>
           </DialogFooter>
         </DialogContent>

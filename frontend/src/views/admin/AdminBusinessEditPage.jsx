@@ -87,6 +87,45 @@ const ADDON_SERVICE_OPTIONS = [
   "3D Printing", "Laser Cutting", "Engraving", "Other",
 ];
 
+const normalizeCategoryName = (v) =>
+  typeof v === "string" ? v.trim().replace(/\s+/g, " ").toLowerCase() : "";
+
+// Print Shop is the only category limited to a single selected service.
+const isPrintShopCategory = (cat, categoryName) => {
+  const name = normalizeCategoryName(cat?.name || categoryName || "");
+  const slug = (cat?.slug || "").trim().toLowerCase();
+  return name === "print shop" || slug === "print-shop";
+};
+
+// "Other" free-text support: the stored list keeps "Other" plus the typed
+// value so the selection round-trips through save → edit → save.
+const otherCustomOf = (list, options) =>
+  (Array.isArray(list) ? list : [])
+    .filter((v) => typeof v === "string" && v !== "Other" && !options.includes(v))
+    .join(", ");
+
+const normalizeOtherList = (list, options) => {
+  const arr = Array.isArray(list) ? list.filter((v) => typeof v === "string" && v.trim()) : [];
+  const customs = arr.filter((v) => v !== "Other" && !options.includes(v));
+  const presets = arr.filter((v) => options.includes(v) && v !== "Other");
+  if (!arr.includes("Other") && customs.length === 0) return presets;
+  const custom = customs.join(", ");
+  return [...presets, "Other", ...(custom ? [custom] : [])];
+};
+
+const setOtherCustomValue = (list, options, text) => {
+  const arr = Array.isArray(list) ? list : [];
+  const presets = arr.filter((v) => options.includes(v));
+  const withOther = text.trim() && !presets.includes("Other") ? [...presets, "Other"] : presets;
+  return text.trim() ? [...withOther, text.trim()] : withOther;
+};
+
+const toggleOtherList = (list, options, nextSelected) => {
+  const arr = Array.isArray(list) ? list : [];
+  const customs = arr.filter((v) => typeof v === "string" && v !== "Other" && !options.includes(v));
+  return nextSelected.includes("Other") ? [...nextSelected, ...customs] : nextSelected;
+};
+
 const emptyForm = {
   name: "",
   description: "",
@@ -219,8 +258,13 @@ const CheckboxGrid = ({ options, selected, onChange, columns = 2 }) => {
     onChange(selected.includes(val) ? selected.filter((v) => v !== val) : [...selected, val]);
   };
 
+  const gridClassName =
+    columns === 3
+      ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2"
+      : "grid grid-cols-1 sm:grid-cols-2 gap-2";
+
   return (
-    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
+    <div className={gridClassName}>
       {options.map((opt) => (
         <label
           key={opt}
@@ -323,11 +367,11 @@ const AdminBusinessEditPage = () => {
           paymentModes: b.paymentModes || [],
           socialMedia: b.socialMedia || emptyForm.socialMedia,
           verificationMedia: b.verificationMedia || emptyForm.verificationMedia,
-          languages: b.languages || [], returnReplacementPolicy: b.returnReplacementPolicy || "",
+          languages: normalizeOtherList(b.languages, LANGUAGE_OPTIONS), returnReplacementPolicy: b.returnReplacementPolicy || "",
           inHouseDesignerAvailable: b.inHouseDesignerAvailable || false,
           customerLocationVisitAvailable: b.customerLocationVisitAvailable || false,
-          addonServices: b.addonServices || [], sampleDisplayAvailable: b.sampleDisplayAvailable || false,
-          preferredFileFormats: b.preferredFileFormats || [],
+          addonServices: normalizeOtherList(b.addonServices, ADDON_SERVICE_OPTIONS), sampleDisplayAvailable: b.sampleDisplayAvailable || false,
+          preferredFileFormats: normalizeOtherList(b.preferredFileFormats, FILE_FORMAT_OPTIONS),
           acceptsPurchaseOrder: b.acceptsPurchaseOrder || false,
           fraudReport: b.fraudReport || emptyForm.fraudReport,
         });
@@ -613,10 +657,14 @@ const AdminBusinessEditPage = () => {
             {form.categoryId && (() => {
               const selectedCat = categories.find((c) => c._id === form.categoryId);
               const services = selectedCat?.services || [];
+              const singleSelect = isPrintShopCategory(selectedCat, form.category);
               return (
-                <FormField label="Services" hint={services.length > 0 ? "Select one or more services" : undefined}>
+                <FormField
+                  label="Services"
+                  hint={services.length > 0 ? (singleSelect ? "Print Shop allows only one service" : "Select one or more services") : undefined}
+                >
                   {services.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {services.map((service) => {
                         const serviceId = service.id || service._id;
                         const isChecked = (form.serviceIds || []).includes(serviceId);
@@ -633,7 +681,11 @@ const AdminBusinessEditPage = () => {
                             checked={isChecked}
                             onChange={() => {
                               const current = form.serviceIds || [];
-                              const updated = isChecked
+                              const updated = singleSelect
+                                ? isChecked
+                                  ? []
+                                  : [serviceId]
+                                : isChecked
                                 ? current.filter((id) => id !== serviceId)
                                 : [...current, serviceId];
                               updateField("serviceIds", updated);
@@ -764,7 +816,7 @@ const AdminBusinessEditPage = () => {
                 options={[
                   { value: "b2b", label: "B2B", desc: "Business to Business - corporate clients" },
                   { value: "b2c", label: "B2C", desc: "Business to Consumer - individual customers" },
-                  { value: "both", label: "Both", desc: "Serve both businesses and individuals" },
+                  { value: "both", label: "B2B and B2C", desc: "Serve both businesses and individuals" },
                 ]}
                 value={form.customerType}
                 onChange={(val) => updateField("customerType", val)}
@@ -788,7 +840,7 @@ const AdminBusinessEditPage = () => {
                 options={[
                   { value: "on_call", label: "On Call", desc: "Orders via phone call or WhatsApp" },
                   { value: "shop_visit", label: "Shop Visit", desc: "Customers visit the shop" },
-                  { value: "both", label: "Both", desc: "Accept orders both ways" },
+                  { value: "both", label: "On Call and Shop Visit", desc: "Accept orders both ways" },
                 ]}
                 value={form.orderingMethod}
                 onChange={(val) => updateField("orderingMethod", val)}
@@ -1096,8 +1148,22 @@ const AdminBusinessEditPage = () => {
                 <p className="text-sm text-muted-foreground">Languages this business supports</p>
               </div>
             </div>
-            <FormField label="Supported Languages">
-              <CheckboxGrid options={LANGUAGE_OPTIONS} selected={form.languages} onChange={(val) => updateField("languages", val)} columns={3} />
+            <FormField label="Communication Languages">
+              <CheckboxGrid
+                options={LANGUAGE_OPTIONS}
+                selected={form.languages}
+                onChange={(val) => updateField("languages", toggleOtherList(form.languages, LANGUAGE_OPTIONS, val))}
+                columns={3}
+              />
+              {form.languages.includes("Other") && (
+                <div className="mt-2">
+                  <Input
+                    value={otherCustomOf(form.languages, LANGUAGE_OPTIONS)}
+                    onChange={(e) => updateField("languages", setOtherCustomValue(form.languages, LANGUAGE_OPTIONS, e.target.value))}
+                    placeholder="Enter your language"
+                  />
+                </div>
+              )}
             </FormField>
           </div>
         );
@@ -1130,7 +1196,16 @@ const AdminBusinessEditPage = () => {
               </FormField>
             </div>
             <FormField label="Add-on Services">
-              <CheckboxGrid options={[...ADDON_SERVICE_OPTIONS, ...customServices]} selected={form.addonServices} onChange={(val) => updateField("addonServices", val)} columns={3} />
+              <CheckboxGrid options={[...ADDON_SERVICE_OPTIONS, ...customServices]} selected={form.addonServices} onChange={(val) => updateField("addonServices", toggleOtherList(form.addonServices, ADDON_SERVICE_OPTIONS, val))} columns={3} />
+              {form.addonServices.includes("Other") && (
+                <div className="mt-2">
+                  <Input
+                    value={otherCustomOf(form.addonServices, ADDON_SERVICE_OPTIONS)}
+                    onChange={(e) => updateField("addonServices", setOtherCustomValue(form.addonServices, ADDON_SERVICE_OPTIONS, e.target.value))}
+                    placeholder="Enter custom add-on service"
+                  />
+                </div>
+              )}
               <div className="mt-3 space-y-2">
                 <div className="flex gap-2">
                   <Input
@@ -1215,10 +1290,19 @@ const AdminBusinessEditPage = () => {
                 <CheckboxGrid
                   options={FILE_FORMAT_OPTIONS}
                   selected={form.sampleDisplayAvailable ? form.preferredFileFormats : []}
-                  onChange={(val) => updateField("preferredFileFormats", val)}
+                  onChange={(val) => updateField("preferredFileFormats", toggleOtherList(form.preferredFileFormats, FILE_FORMAT_OPTIONS, val))}
                   columns={3}
                 />
               </div>
+              {form.preferredFileFormats.includes("Other") && form.sampleDisplayAvailable && (
+                <div className="mt-2">
+                  <Input
+                    value={otherCustomOf(form.preferredFileFormats, FILE_FORMAT_OPTIONS)}
+                    onChange={(e) => updateField("preferredFileFormats", setOtherCustomValue(form.preferredFileFormats, FILE_FORMAT_OPTIONS, e.target.value))}
+                    placeholder="Enter your file format"
+                  />
+                </div>
+              )}
               {!form.sampleDisplayAvailable && (
                 <p className="text-xs text-muted-foreground mt-1.5">Enable Sample / Display Available to select file formats</p>
               )}

@@ -48,7 +48,7 @@ const Signup = () => {
   const { signup, refreshUser } = useAuth();
   const router = useRouter();
 
-  const [businessForm, setBusinessForm] = useState({ companyName: "", location: "", businessCategory: "", contactNumber: "", officialEmail: "", gstNumber: "", paymentRule: "" });
+  const [businessForm, setBusinessForm] = useState({ companyName: "", location: "", businessCategory: "", contactNumber: "", officialEmail: "", gstNumber: "", paymentRule: [] });
   const [resellerForm, setResellerForm] = useState({ companyName: "", address: "", businessCategory: "", contactNumber: "", gstNumber: "", yearlyTurnover: "" });
   const [locationVideo, setLocationVideo] = useState(null);
   const [businessCard, setBusinessCard] = useState(null);
@@ -65,6 +65,12 @@ const Signup = () => {
     const e = {};
     if (!fullName.trim()) e.fullName = "Full name is required";
     else if (fullName.trim().length < 2) e.fullName = "Must be at least 2 characters";
+    if (role === "USER" || role === "VENDOR") {
+      const whatsapp = whatsappNumber.trim();
+      if (!whatsapp) e.whatsappNumber = "WhatsApp number is required";
+      else if (!/^\+?[\d\s\-()]+$/.test(whatsapp) || whatsapp.replace(/\D/g, "").length < 7 || whatsapp.replace(/\D/g, "").length > 15)
+        e.whatsappNumber = "Enter a valid WhatsApp number";
+    }
     if (!email.trim()) e.email = "Email is required";
     else if (!/^\S+@\S+\.\S+$/.test(email)) e.email = "Invalid email";
     if (!password) e.password = "Password is required";
@@ -121,6 +127,18 @@ const Signup = () => {
   const handleTypeSelect = (type) => { setRegistrationType(type); setStep(STEPS.COMPLETE); };
   const handleBusinessChange = (field, value) => { setBusinessForm((p) => ({ ...p, [field]: value })); if (errors[field]) setErrors((p) => ({ ...p, [field]: "" })); };
   const handleResellerChange = (field, value) => { setResellerForm((p) => ({ ...p, [field]: value })); if (errors[field]) setErrors((p) => ({ ...p, [field]: "" })); };
+
+  const selectedPaymentRules = Array.isArray(businessForm.paymentRule)
+    ? businessForm.paymentRule
+    : businessForm.paymentRule
+      ? [businessForm.paymentRule]
+      : [];
+  const togglePaymentRule = (rule) => {
+    setBusinessForm((p) => {
+      const current = Array.isArray(p.paymentRule) ? p.paymentRule : p.paymentRule ? [p.paymentRule] : [];
+      return { ...p, paymentRule: current.includes(rule) ? current.filter((r) => r !== rule) : [...current, rule] };
+    });
+  };
 
   const validateBusinessForm = () => { const e = {}; if (!businessForm.companyName.trim()) e.companyName = "Required"; if (!businessForm.location.trim()) e.location = "Required"; if (!businessForm.businessCategory) e.businessCategory = "Required"; if (!businessForm.contactNumber.trim()) e.contactNumber = "Required"; setErrors(e); return Object.keys(e).length === 0; };
   const validateResellerForm = () => { const e = {}; if (!resellerForm.companyName.trim()) e.companyName = "Required"; if (!resellerForm.businessCategory) e.businessCategory = "Required"; if (!resellerForm.contactNumber.trim()) e.contactNumber = "Required"; if (!businessCard) e.businessCard = "Required"; setErrors(e); return Object.keys(e).length === 0; };
@@ -210,9 +228,10 @@ const Signup = () => {
         {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
       </div>
       <div className="space-y-1.5">
-        <Label className="text-sm font-medium text-foreground">WhatsApp Number</Label>
+        <Label className="text-sm font-medium text-foreground">WhatsApp Number {(role === "USER" || role === "VENDOR") && "*"}</Label>
         <div className="relative"><Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input type="tel" placeholder="Enter WhatsApp number" value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} disabled={loading} className="pl-9 h-11" /></div>
+          <Input type="tel" placeholder="Enter WhatsApp number" value={whatsappNumber} onChange={(e) => { setWhatsappNumber(e.target.value); if (errors.whatsappNumber) setErrors((p) => ({ ...p, whatsappNumber: "" })); }} disabled={loading} className="pl-9 h-11" /></div>
+        {errors.whatsappNumber && <p className="text-xs text-destructive">{errors.whatsappNumber}</p>}
       </div>
       <div className="space-y-1.5">
         <Label className="text-sm font-medium text-foreground">Email Address *</Label>
@@ -358,14 +377,17 @@ const Signup = () => {
         {errors.businessCategory && <p className="text-xs text-destructive">{errors.businessCategory}</p>}
       </div>
       <div className="space-y-1.5">
-        <Label className="text-sm font-medium text-foreground">Payment Rule *</Label>
+        <Label className="text-sm font-medium text-foreground">Payment Rule * <span className="text-xs font-normal text-muted-foreground">(select one or more)</span></Label>
         <div className="grid grid-cols-2 gap-3">
-          {["Cash & Carry", "PO Based"].map((rule) => (
-            <button key={rule} type="button" onClick={() => handleBusinessChange("paymentRule", rule)}
-              className={`p-2.5 border-2 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${businessForm.paymentRule === rule ? "border-primary bg-primary/5 text-primary" : "border-border bg-muted text-muted-foreground"}`}>
-              {businessForm.paymentRule === rule && <CheckCircle size={14} />} {rule}
-            </button>
-          ))}
+          {["Cash & Carry", "PO Based"].map((rule) => {
+            const selected = selectedPaymentRules.includes(rule);
+            return (
+              <button key={rule} type="button" onClick={() => togglePaymentRule(rule)} aria-pressed={selected}
+                className={`p-2.5 border-2 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${selected ? "border-primary bg-primary/5 text-primary" : "border-border bg-muted text-muted-foreground"}`}>
+                {selected && <CheckCircle size={14} />} {rule}
+              </button>
+            );
+          })}
         </div>
       </div>
       {serverError && <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm"><AlertCircle size={16} /> {serverError}</div>}
@@ -382,7 +404,7 @@ const Signup = () => {
     <div className="space-y-3">
       <h3 className="font-semibold text-foreground">Reseller Application</h3>
       <div className="flex items-center gap-2 p-2.5 rounded-lg bg-orange-500/10 text-orange-600 text-xs">
-        <Shield size={14} className="flex-shrink-0" /> Your reseller account is activated instantly. No admin approval needed.
+        <Shield size={14} className="flex-shrink-0" /> Your application goes to our admin for review. Your reseller account stays pending until it is approved.
       </div>
       {[
         { field: "companyName", label: "Company Name *", icon: Building2, placeholder: "Enter company name" },
@@ -474,18 +496,6 @@ const Signup = () => {
           <p className="text-slate-400 text-lg text-center max-w-md">
             Create an account to explore local printing services or list your business.
           </p>
-          <div className="mt-10 grid grid-cols-3 gap-6 text-center">
-            {[
-              { num: "500+", label: "Printers" },
-              { num: "10K+", label: "Orders" },
-              { num: "4.8", label: "Rating" },
-            ].map((s) => (
-              <div key={s.label} className="bg-white/5 rounded-xl px-5 py-4 backdrop-blur-sm border border-white/10">
-                <div className="text-2xl font-bold text-white">{s.num}</div>
-                <div className="text-xs text-slate-400 mt-1">{s.label}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 

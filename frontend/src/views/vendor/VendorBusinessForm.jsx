@@ -88,6 +88,76 @@ const ADDON_SERVICE_OPTIONS = [
   "3D Printing", "Laser Cutting", "Engraving", "Other",
 ];
 
+const DESCRIPTION_MIN = 150;
+const DESCRIPTION_MAX = 250;
+
+const WEEK_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+
+const isBlank = (v) => typeof v !== "string" || v.trim().length === 0;
+const isHttpUrl = (v) => typeof v === "string" && /^https?:\/\/\S+$/i.test(v.trim());
+
+const isValidPhone = (v) => {
+  if (isBlank(v)) return false;
+  if (!/^\+?[\d\s\-()]+$/.test(v.trim())) return false;
+  const digits = v.replace(/\D/g, "");
+  return digits.length >= 7 && digits.length <= 15;
+};
+
+const isValidEmail = (v) => !isBlank(v) && /^\S+@\S+\.\S+$/.test(v.trim());
+
+const normalizeCategoryName = (v) =>
+  typeof v === "string" ? v.trim().replace(/\s+/g, " ").toLowerCase() : "";
+
+// Print Shop is the only category limited to a single selected service.
+const isPrintShopCategory = (cat, categoryName) => {
+  const name = normalizeCategoryName(cat?.name || categoryName || "");
+  const slug = (cat?.slug || "").trim().toLowerCase();
+  return name === "print shop" || slug === "print-shop";
+};
+
+// "Other" free-text support: the stored list keeps "Other" plus the typed
+// value so the selection round-trips through save → edit → save.
+const otherCustomOf = (list, options) =>
+  (Array.isArray(list) ? list : [])
+    .filter((v) => typeof v === "string" && v !== "Other" && !options.includes(v))
+    .join(", ");
+
+const normalizeOtherList = (list, options) => {
+  const arr = Array.isArray(list) ? list.filter((v) => typeof v === "string" && v.trim()) : [];
+  const customs = arr.filter((v) => v !== "Other" && !options.includes(v));
+  const presets = arr.filter((v) => options.includes(v) && v !== "Other");
+  if (!arr.includes("Other") && customs.length === 0) return presets;
+  const custom = customs.join(", ");
+  return [...presets, "Other", ...(custom ? [custom] : [])];
+};
+
+const setOtherCustomValue = (list, options, text) => {
+  const arr = Array.isArray(list) ? list : [];
+  const presets = arr.filter((v) => options.includes(v));
+  const withOther = text.trim() && !presets.includes("Other") ? [...presets, "Other"] : presets;
+  return text.trim() ? [...withOther, text.trim()] : withOther;
+};
+
+const toggleOtherList = (list, options, nextSelected) => {
+  const arr = Array.isArray(list) ? list : [];
+  const customs = arr.filter((v) => typeof v === "string" && v !== "Other" && !options.includes(v));
+  return nextSelected.includes("Other") ? [...nextSelected, ...customs] : nextSelected;
+};
+
+const workingHoursError = (wh) => {
+  if (!wh || typeof wh !== "object") return "Working hours are required";
+  if (WEEK_DAYS.some((d) => !wh[d] || typeof wh[d] !== "object")) {
+    return "Working hours are required for all seven days";
+  }
+  const openDays = WEEK_DAYS.filter((d) => wh[d].open);
+  if (openDays.length === 0) return "Working hours must mark at least one day as open";
+  const incomplete = openDays.find((d) => !wh[d].openingTime || !wh[d].closingTime);
+  if (incomplete) {
+    return `Opening and closing times are required for ${incomplete.charAt(0).toUpperCase() + incomplete.slice(1)}`;
+  }
+  return "";
+};
+
 const emptyForm = {
   name: "",
   description: "",
@@ -128,12 +198,13 @@ const emptyForm = {
   },
   languages: [],
   returnReplacementPolicy: "",
-  inHouseDesignerAvailable: false,
-  customerLocationVisitAvailable: false,
+  replaceMistakesAtNoCharge: "",
+  inHouseDesignerAvailable: null,
+  customerLocationVisitAvailable: null,
   addonServices: [],
-  sampleDisplayAvailable: false,
+  sampleDisplayAvailable: null,
   preferredFileFormats: [],
-  acceptsPurchaseOrder: false,
+  acceptsPurchaseOrder: null,
   fraudReport: [{ contactName: "", designation: "", contactNumber: "" }],
 };
 
@@ -295,7 +366,7 @@ const TagInput = ({ tags, onChange, placeholder }) => {
   );
 };
 
-const RadioCards = ({ options, value, onChange }) => (
+const RadioCards = ({ options, value, onChange, name }) => (
   <div className="space-y-2">
     {options.map((opt) => (
       <label
@@ -308,7 +379,7 @@ const RadioCards = ({ options, value, onChange }) => (
       >
         <input
           type="radio"
-          name={opt.name || "radio"}
+          name={name || opt.name || "radio"}
           value={opt.value}
           checked={value === opt.value}
           onChange={(e) => onChange(e.target.value)}
@@ -451,18 +522,27 @@ const VendorBusinessForm = () => {
             paymentModes: b.paymentModes || [],
             socialMedia: b.socialMedia || emptyForm.socialMedia,
             verificationMedia: b.verificationMedia || emptyForm.verificationMedia,
-            languages: b.languages || [], returnReplacementPolicy: b.returnReplacementPolicy || "",
-            inHouseDesignerAvailable: b.inHouseDesignerAvailable || false,
-            customerLocationVisitAvailable: b.customerLocationVisitAvailable || false,
-            addonServices: b.addonServices || [], sampleDisplayAvailable: b.sampleDisplayAvailable || false,
-            preferredFileFormats: b.preferredFileFormats || [],
-            acceptsPurchaseOrder: b.acceptsPurchaseOrder || false,
+            languages: normalizeOtherList(b.languages, LANGUAGE_OPTIONS),
+            returnReplacementPolicy: b.returnReplacementPolicy || "",
+            replaceMistakesAtNoCharge:
+              b.replaceMistakesAtNoCharge === "Yes" || b.replaceMistakesAtNoCharge === "No"
+                ? b.replaceMistakesAtNoCharge
+                : "",
+            inHouseDesignerAvailable: typeof b.inHouseDesignerAvailable === "boolean" ? b.inHouseDesignerAvailable : null,
+            customerLocationVisitAvailable: typeof b.customerLocationVisitAvailable === "boolean" ? b.customerLocationVisitAvailable : null,
+            addonServices: normalizeOtherList(b.addonServices, ADDON_SERVICE_OPTIONS),
+            sampleDisplayAvailable: typeof b.sampleDisplayAvailable === "boolean" ? b.sampleDisplayAvailable : null,
+            preferredFileFormats: normalizeOtherList(b.preferredFileFormats, FILE_FORMAT_OPTIONS),
+            acceptsPurchaseOrder: typeof b.acceptsPurchaseOrder === "boolean" ? b.acceptsPurchaseOrder : null,
             fraudReport: Array.isArray(b.fraudReport)
               ? b.fraudReport
               : b.fraudReport && b.fraudReport.contactName
                 ? [b.fraudReport]
                 : emptyForm.fraudReport,
           });
+          // The business already has a stored location, so requiring a fresh
+          // geolocation fix would block every edit save.
+          setLocationUsed(true);
         } catch (err) {
           setSubmitError(err.response?.data?.message || "Failed to load business");
         } finally {
@@ -538,18 +618,143 @@ const VendorBusinessForm = () => {
     }
   }, [form.verificationMedia.thumbnailImages, updateNested]);
 
-  const validateStep = (stepIndex) => {
+  const getStepErrors = (stepIndex) => {
     const errs = {};
-    if (stepIndex === 0 && !form.name.trim()) errs.name = "Business name is required";
-    if (stepIndex === 2 && !locationUsed) errs.location = "Please use your current location before continuing.";
-    if (stepIndex === 3 && form.gstAvailable && form.gstNumber) {
-      const gst = form.gstNumber.trim();
+    const f = form;
+
+    if (stepIndex === 0) {
+      if (!f.name.trim()) errs.name = "Business name is required";
+
+      const descLen = isBlank(f.description) ? 0 : f.description.trim().length;
+      if (descLen === 0) errs.description = "Business description is required";
+      else if (descLen < DESCRIPTION_MIN) errs.description = `Business description must be at least ${DESCRIPTION_MIN} characters`;
+      else if (descLen > DESCRIPTION_MAX) errs.description = `Business description must be at most ${DESCRIPTION_MAX} characters`;
+
+      const yearRaw = String(f.establishedYear ?? "").trim();
+      const year = yearRaw ? Number(yearRaw) : NaN;
+      const maxYear = new Date().getFullYear();
+      if (!yearRaw) errs.establishedYear = "Established year is required";
+      else if (!Number.isInteger(year) || year < 1900 || year > maxYear) {
+        errs.establishedYear = `Established year must be between 1900 and ${maxYear}`;
+      }
+
+      const whErr = workingHoursError(f.workingHours);
+      if (whErr) errs.workingHours = whErr;
+    }
+
+    if (stepIndex === 1) {
+      if (isBlank(f.contactName)) errs.contactName = "Contact name is required";
+      if (isBlank(f.phone)) errs.phone = "Phone number is required";
+      else if (!isValidPhone(f.phone)) errs.phone = "Please provide a valid phone number";
+      if (isBlank(f.whatsapp)) errs.whatsapp = "WhatsApp number is required";
+      else if (!isValidPhone(f.whatsapp)) errs.whatsapp = "Please provide a valid WhatsApp number";
+      if (isBlank(f.contactEmail)) errs.contactEmail = "Email is required";
+      else if (!isValidEmail(f.contactEmail)) errs.contactEmail = "Please provide a valid email address";
+    }
+
+    if (stepIndex === 2) {
+      if (isBlank(f.category) && !f.categoryId) errs.category = "Business category is required";
+      if (!locationUsed) errs.location = "Please use your current location before continuing.";
+      if (isBlank(f.address)) errs.address = "Address is required";
+      if (isBlank(f.city)) errs.city = "City is required";
+      const selectedCat = categories.find((c) => c._id === f.categoryId);
+      if (
+        isPrintShopCategory(selectedCat, f.category) &&
+        (f.serviceIds || []).length > 1
+      ) {
+        errs.services = "Print Shop allows only one service. Please select a single service.";
+      }
+    }
+
+    if (stepIndex === 3 && f.gstAvailable && f.gstNumber) {
+      const gst = f.gstNumber.trim();
       if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gst)) {
         errs.gstNumber = "Invalid GST number format (e.g. 22AAAAA0000A1Z5)";
       }
     }
+
+    if (stepIndex === 4 && !f.orderLimits) errs.orderLimits = "Order quantity preference is required";
+    if (stepIndex === 5 && !f.serviceType) errs.serviceType = "Service type is required";
+    if (stepIndex === 6 && !f.customerType) errs.customerType = "Target customers is required";
+    if (stepIndex === 7 && !f.orderingMethod) errs.orderingMethod = "Order acceptance method is required";
+
+    if (stepIndex === 8) {
+      if (!Array.isArray(f.paymentModes) || f.paymentModes.filter((v) => !isBlank(v)).length === 0) {
+        errs.paymentModes = "Please select at least one accepted payment method";
+      }
+    }
+
+    if (stepIndex === 10) {
+      const vm = f.verificationMedia || {};
+      if (!isHttpUrl(vm.machineryWorkingVideo)) errs.machineryWorkingVideo = "Machinery working video is required";
+      if (!isHttpUrl(vm.completeOutletVideo)) errs.completeOutletVideo = "Complete outlet video is required";
+      if (!isHttpUrl(vm.outdoorStoreImage)) errs.outdoorStoreImage = "Outdoor store image is required";
+      if (!isHttpUrl(vm.indoorStoreImage)) errs.indoorStoreImage = "Indoor store image is required";
+      const thumbs = Array.isArray(vm.thumbnailImages) ? vm.thumbnailImages.filter(isHttpUrl) : [];
+      if (thumbs.length === 0) errs.thumbnailImages = "At least one thumbnail / slideshow image is required";
+      if (Object.values(uploading).some(Boolean)) errs.uploads = "Please wait for the uploads to finish";
+    }
+
+    if (stepIndex === 11) {
+      const langs = Array.isArray(f.languages) ? f.languages.filter((v) => !isBlank(v)) : [];
+      if (langs.length === 0) errs.languages = "Please select at least one communication language";
+      else if (langs.includes("Other") && !otherCustomOf(f.languages, LANGUAGE_OPTIONS).trim()) {
+        errs.languages = "Please enter your language in the Other field";
+      }
+    }
+
+    if (stepIndex === 12) {
+      if (f.replaceMistakesAtNoCharge !== "Yes" && f.replaceMistakesAtNoCharge !== "No") {
+        errs.replaceMistakesAtNoCharge = "Please select Yes or No";
+      }
+      if (typeof f.inHouseDesignerAvailable !== "boolean") {
+        errs.inHouseDesignerAvailable = "Please select Yes or No";
+      }
+      if (typeof f.customerLocationVisitAvailable !== "boolean") {
+        errs.customerLocationVisitAvailable = "Please select Yes or No";
+      }
+      const addons = Array.isArray(f.addonServices) ? f.addonServices.filter((v) => !isBlank(v)) : [];
+      if (addons.includes("Other") && !otherCustomOf(f.addonServices, ADDON_SERVICE_OPTIONS).trim()) {
+        errs.addonServices = "Please enter your custom add-on service in the Other field";
+      }
+    }
+
+    if (stepIndex === 13) {
+      if (typeof f.sampleDisplayAvailable !== "boolean") {
+        errs.sampleDisplayAvailable = "Please select Yes or No";
+      }
+      const formats = Array.isArray(f.preferredFileFormats) ? f.preferredFileFormats.filter((v) => !isBlank(v)) : [];
+      if (formats.length === 0) errs.preferredFileFormats = "Please select at least one preferred file format";
+      else if (formats.includes("Other") && !otherCustomOf(f.preferredFileFormats, FILE_FORMAT_OPTIONS).trim()) {
+        errs.preferredFileFormats = "Please enter your file format in the Other field";
+      }
+    }
+
+    if (stepIndex === 14 && typeof f.acceptsPurchaseOrder !== "boolean") {
+      errs.acceptsPurchaseOrder = "Please select Yes or No";
+    }
+
+    return errs;
+  };
+
+  const validateStep = (stepIndex) => {
+    const errs = getStepErrors(stepIndex);
     setErrors(errs);
     return Object.keys(errs).length === 0;
+  };
+
+  // Runs every step so a required field can never be skipped before submit.
+  // Returns the index of the first invalid step, or -1 when everything is valid.
+  const validateAllSteps = () => {
+    const merged = {};
+    let firstInvalid = -1;
+    for (let i = 0; i < STEPS.length; i += 1) {
+      const errs = getStepErrors(i);
+      if (Object.keys(errs).length > 0 && firstInvalid === -1) firstInvalid = i;
+      Object.assign(merged, errs);
+    }
+    setErrors(merged);
+    return firstInvalid;
   };
 
   const nextStep = () => { if (validateStep(step)) setStep((s) => Math.min(s + 1, STEPS.length - 1)); };
@@ -636,7 +841,12 @@ const VendorBusinessForm = () => {
   };
 
   const handleSubmit = async () => {
-    if (!validateStep(step)) return;
+    const invalidStep = validateAllSteps();
+    if (invalidStep !== -1) {
+      setStep(invalidStep);
+      setSubmitError("Please fix the highlighted fields before submitting.");
+      return;
+    }
     setSaving(true);
     setSubmitError("");
     try {
@@ -668,6 +878,12 @@ const VendorBusinessForm = () => {
 
   const handleSaveChanges = async () => {
     if (!isEdit) return;
+    const invalidStep = validateAllSteps();
+    if (invalidStep !== -1) {
+      setStep(invalidStep);
+      setSubmitError("Please fix the highlighted fields before submitting.");
+      return;
+    }
     setSaving(true);
     setSubmitError("");
     setSaveSuccess(false);
@@ -747,13 +963,16 @@ const VendorBusinessForm = () => {
             <FormField label="Business Name" required error={errors.name}>
               <Input value={form.name} onChange={(e) => updateField("name", e.target.value)} placeholder="e.g. ABC Digital Printing" />
             </FormField>
-            <FormField label="Business Description" hint="Supports AI-assisted description workflow">
+            <FormField label="Business Description" required error={errors.description}>
               <Textarea value={form.description} onChange={(e) => updateField("description", e.target.value)} placeholder="Describe your business, services, and specialties..." rows={4} />
+              <p className="text-xs text-muted-foreground text-right">
+                {form.description.trim().length} / {DESCRIPTION_MAX} characters (min {DESCRIPTION_MIN})
+              </p>
             </FormField>
-            <FormField label="Established Year">
+            <FormField label="Established Year" required error={errors.establishedYear}>
               <Input type="number" value={form.establishedYear} onChange={(e) => updateField("establishedYear", e.target.value)} placeholder="e.g. 2015" min="1900" max={new Date().getFullYear()} />
             </FormField>
-            <FormField label="Working Hours">
+            <FormField label="Working Hours" required error={errors.workingHours}>
               <div className="space-y-2">
                 {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((day) => {
                   const dayData = form.workingHours[day];
@@ -819,19 +1038,19 @@ const VendorBusinessForm = () => {
                 <p className="text-sm text-muted-foreground">How customers can reach you</p>
               </div>
             </div>
-            <FormField label="Contact Name">
+            <FormField label="Contact Name" required error={errors.contactName}>
               <Input value={form.contactName} onChange={(e) => updateField("contactName", e.target.value)} placeholder="e.g. Ramesh Kumar" />
             </FormField>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField label="Phone">
+              <FormField label="Phone" required error={errors.phone}>
                 <Input value={form.phone} onChange={(e) => updateField("phone", e.target.value)} placeholder="e.g. +91 98765 43210" />
               </FormField>
-              <FormField label="WhatsApp">
+              <FormField label="WhatsApp" required error={errors.whatsapp}>
                 <Input value={form.whatsapp} onChange={(e) => updateField("whatsapp", e.target.value)} placeholder="e.g. +91 98765 43210" />
               </FormField>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField label="Email">
+              <FormField label="Email" required error={errors.contactEmail}>
                 <Input type="email" value={form.contactEmail} onChange={(e) => updateField("contactEmail", e.target.value)} placeholder="e.g. contact@abcprinting.com" />
               </FormField>
               <FormField label="Website">
@@ -851,7 +1070,7 @@ const VendorBusinessForm = () => {
                 <p className="text-sm text-muted-foreground">What you do and where you are</p>
               </div>
             </div>
-            <FormField label="Business Category">
+            <FormField label="Business Category" required error={errors.category}>
               <CategoryCombobox
                 categories={categories}
                 value={form.categoryId || ""}
@@ -876,8 +1095,13 @@ const VendorBusinessForm = () => {
             {form.categoryId && (() => {
               const selectedCat = categories.find((c) => c._id === form.categoryId);
               const services = selectedCat?.services || [];
+              const singleSelect = isPrintShopCategory(selectedCat, form.category);
               return (
-                <FormField label="Services" hint={services.length > 0 ? "Select one or more services" : undefined}>
+                <FormField
+                  label="Services"
+                  error={errors.services}
+                  hint={services.length > 0 ? (singleSelect ? "Print Shop allows only one service" : "Select one or more services") : undefined}
+                >
                   {services.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {services.map((service) => {
@@ -896,10 +1120,19 @@ const VendorBusinessForm = () => {
                               onChange={() => {
                                 const serviceId = service.id || service._id;
                                 const current = form.serviceIds || [];
-                                const updated = isChecked
+                                const updated = singleSelect
+                                  ? isChecked
+                                    ? []
+                                    : [serviceId]
+                                  : isChecked
                                   ? current.filter((id) => id !== serviceId)
                                   : [...current, serviceId];
                                 updateField("serviceIds", updated);
+                                setErrors((prev) => {
+                                  const next = { ...prev };
+                                  delete next.services;
+                                  return next;
+                                });
                               }}
                             />
                             <span className="text-sm">{service.name}</span>
@@ -913,10 +1146,10 @@ const VendorBusinessForm = () => {
                 </FormField>
               );
             })()}
-            <FormField label="Address">
+            <FormField label="Address" required error={errors.address}>
               <Input value={form.address} onChange={(e) => updateField("address", e.target.value)} placeholder="e.g. 123 Main Street, Andheri West" />
             </FormField>
-            <FormField label="City">
+            <FormField label="City" required error={errors.city}>
               <Input value={form.city} onChange={(e) => updateField("city", e.target.value)} placeholder="e.g. Mumbai" />
             </FormField>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -986,7 +1219,7 @@ const VendorBusinessForm = () => {
                 <p className="text-sm text-muted-foreground">What order quantities do you accept?</p>
               </div>
             </div>
-            <FormField label="Order Quantity Preference">
+            <FormField label="Order Quantity Preference" required error={errors.orderLimits}>
               <RadioCards
                 options={[
                   { value: "single", label: "Single Qty", desc: "Individual piece orders" },
@@ -1011,7 +1244,7 @@ const VendorBusinessForm = () => {
                 <p className="text-sm text-muted-foreground">What level of service do you provide?</p>
               </div>
             </div>
-            <FormField label="Service Type">
+            <FormField label="Service Type" required error={errors.serviceType}>
               <RadioCards
                 options={[
                   { value: "print_only", label: "Print Only", desc: "We only handle printing" },
@@ -1035,12 +1268,12 @@ const VendorBusinessForm = () => {
                 <p className="text-sm text-muted-foreground">Who do you primarily serve?</p>
               </div>
             </div>
-            <FormField label="Target Customers">
+            <FormField label="Target Customers" required error={errors.customerType}>
               <RadioCards
                 options={[
                   { value: "b2b", label: "B2B", desc: "Business to Business - corporate clients" },
                   { value: "b2c", label: "B2C", desc: "Business to Consumer - individual customers" },
-                  { value: "both", label: "Both", desc: "Serve both businesses and individuals" },
+                  { value: "both", label: "B2B and B2C", desc: "Serve both businesses and individuals" },
                 ]}
                 value={form.customerType}
                 onChange={(val) => updateField("customerType", val)}
@@ -1059,12 +1292,12 @@ const VendorBusinessForm = () => {
                 <p className="text-sm text-muted-foreground">How can customers place orders?</p>
               </div>
             </div>
-            <FormField label="Order Acceptance Method">
+            <FormField label="Order Acceptance Method" required error={errors.orderingMethod}>
               <RadioCards
                 options={[
                   { value: "on_call", label: "On Call", desc: "Orders via phone call or WhatsApp" },
                   { value: "shop_visit", label: "Shop Visit", desc: "Customers visit your shop" },
-                  { value: "both", label: "Both", desc: "Accept orders both ways" },
+                  { value: "both", label: "On Call and Shop Visit", desc: "Accept orders both ways" },
                 ]}
                 value={form.orderingMethod}
                 onChange={(val) => updateField("orderingMethod", val)}
@@ -1083,7 +1316,7 @@ const VendorBusinessForm = () => {
                 <p className="text-sm text-muted-foreground">What payment methods do you accept?</p>
               </div>
             </div>
-            <FormField label="Accepted Payment Methods">
+            <FormField label="Accepted Payment Methods" required error={errors.paymentModes}>
               <CheckboxGrid options={PAYMENT_OPTIONS} selected={form.paymentModes} onChange={(val) => updateField("paymentModes", val)} columns={2} />
             </FormField>
           </div>
@@ -1143,9 +1376,16 @@ const VendorBusinessForm = () => {
               </div>
             </div>
 
+            {errors.uploads && (
+              <div className="flex items-start gap-2 p-2.5 rounded-lg bg-destructive/10 text-destructive text-xs">
+                <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                <span>{errors.uploads}</span>
+              </div>
+            )}
+
             {!useUrlMode ? (
               <>
-                <FormField label="Machinery Working Video" error={uploadErrors.machineryWorkingVideo}>
+                <FormField label="Machinery Working Video" required error={errors.machineryWorkingVideo || uploadErrors.machineryWorkingVideo}>
                   {form.verificationMedia.machineryWorkingVideo ? (
                     <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                       <Check size={14} className="text-emerald-500 flex-shrink-0" />
@@ -1189,7 +1429,7 @@ const VendorBusinessForm = () => {
                   />
                 </FormField>
 
-                <FormField label="Complete Outlet Video" error={uploadErrors.completeOutletVideo}>
+                <FormField label="Complete Outlet Video" required error={errors.completeOutletVideo || uploadErrors.completeOutletVideo}>
                   {form.verificationMedia.completeOutletVideo ? (
                     <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                       <Check size={14} className="text-emerald-500 flex-shrink-0" />
@@ -1233,7 +1473,7 @@ const VendorBusinessForm = () => {
                   />
                 </FormField>
 
-                <FormField label="Outdoor Store Image" error={uploadErrors.outdoorStoreImage}>
+                <FormField label="Outdoor Store Image" required error={errors.outdoorStoreImage || uploadErrors.outdoorStoreImage}>
                   {form.verificationMedia.outdoorStoreImage ? (
                     <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                       <Check size={14} className="text-emerald-500 flex-shrink-0" />
@@ -1277,7 +1517,7 @@ const VendorBusinessForm = () => {
                   />
                 </FormField>
 
-                <FormField label="Indoor Store Image" error={uploadErrors.indoorStoreImage}>
+                <FormField label="Indoor Store Image" required error={errors.indoorStoreImage || uploadErrors.indoorStoreImage}>
                   {form.verificationMedia.indoorStoreImage ? (
                     <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                       <Check size={14} className="text-emerald-500 flex-shrink-0" />
@@ -1321,7 +1561,7 @@ const VendorBusinessForm = () => {
                   />
                 </FormField>
 
-                <FormField label="Thumbnail / Slideshow Images" hint="Select multiple images" error={uploadErrors.thumbnailImages}>
+                <FormField label="Thumbnail / Slideshow Images" hint="Select multiple images" required error={errors.thumbnailImages || uploadErrors.thumbnailImages}>
                   {(form.verificationMedia.thumbnailImages || []).length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
                       {form.verificationMedia.thumbnailImages.map((url, i) => (
@@ -1371,35 +1611,35 @@ const VendorBusinessForm = () => {
               </>
             ) : (
               <>
-                <FormField label="Machinery Working Video URL">
+                <FormField label="Machinery Working Video URL" required error={errors.machineryWorkingVideo}>
                   <Input
                     value={form.verificationMedia.machineryWorkingVideo}
                     onChange={(e) => updateNested("verificationMedia", "machineryWorkingVideo", e.target.value)}
                     placeholder="Paste your Google Drive video link"
                   />
                 </FormField>
-                <FormField label="Complete Outlet Video URL">
+                <FormField label="Complete Outlet Video URL" required error={errors.completeOutletVideo}>
                   <Input
                     value={form.verificationMedia.completeOutletVideo}
                     onChange={(e) => updateNested("verificationMedia", "completeOutletVideo", e.target.value)}
                     placeholder="Paste your Google Drive video link"
                   />
                 </FormField>
-                <FormField label="Outdoor Store Image URL">
+                <FormField label="Outdoor Store Image URL" required error={errors.outdoorStoreImage}>
                   <Input
                     value={form.verificationMedia.outdoorStoreImage}
                     onChange={(e) => updateNested("verificationMedia", "outdoorStoreImage", e.target.value)}
                     placeholder="Paste your Google Drive image link"
                   />
                 </FormField>
-                <FormField label="Indoor Store Image URL">
+                <FormField label="Indoor Store Image URL" required error={errors.indoorStoreImage}>
                   <Input
                     value={form.verificationMedia.indoorStoreImage}
                     onChange={(e) => updateNested("verificationMedia", "indoorStoreImage", e.target.value)}
                     placeholder="Paste your Google Drive image link"
                   />
                 </FormField>
-                <FormField label="Thumbnail / Slideshow Images" hint="Paste Google Drive image links, separated by commas">
+                <FormField label="Thumbnail / Slideshow Images" hint="Paste Google Drive image links, separated by commas" required error={errors.thumbnailImages}>
                   <Input
                     value={(form.verificationMedia.thumbnailImages || []).join(", ")}
                     onChange={(e) => updateNested("verificationMedia", "thumbnailImages", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
@@ -1421,8 +1661,22 @@ const VendorBusinessForm = () => {
                 <p className="text-sm text-muted-foreground">Languages your business supports</p>
               </div>
             </div>
-            <FormField label="Supported Languages">
-              <CheckboxGrid options={LANGUAGE_OPTIONS} selected={form.languages} onChange={(val) => updateField("languages", val)} columns={3} />
+            <FormField label="Communication Languages" required error={errors.languages}>
+              <CheckboxGrid
+                options={LANGUAGE_OPTIONS}
+                selected={form.languages}
+                onChange={(val) => updateField("languages", toggleOtherList(form.languages, LANGUAGE_OPTIONS, val))}
+                columns={3}
+              />
+              {form.languages.includes("Other") && (
+                <div className="mt-2">
+                  <Input
+                    value={otherCustomOf(form.languages, LANGUAGE_OPTIONS)}
+                    onChange={(e) => updateField("languages", setOtherCustomValue(form.languages, LANGUAGE_OPTIONS, e.target.value))}
+                    placeholder="Enter your language"
+                  />
+                </div>
+              )}
             </FormField>
           </div>
         );
@@ -1437,25 +1691,58 @@ const VendorBusinessForm = () => {
                 <p className="text-sm text-muted-foreground">Extra information about your business</p>
               </div>
             </div>
+            <FormField
+              label="If any mistakes happen from your end, after approval of the customer will you replace them on with no charge?"
+              required
+              error={errors.replaceMistakesAtNoCharge}
+            >
+              <RadioCards
+                name="replaceMistakesAtNoCharge"
+                options={[
+                  { value: "Yes", label: "Yes", desc: "Replacement is provided at no charge" },
+                  { value: "No", label: "No", desc: "Replacement is not provided free of charge" },
+                ]}
+                value={form.replaceMistakesAtNoCharge}
+                onChange={(val) => updateField("replaceMistakesAtNoCharge", val)}
+              />
+            </FormField>
             <FormField label="Return / Replacement Policy">
               <Textarea value={form.returnReplacementPolicy} onChange={(e) => updateField("returnReplacementPolicy", e.target.value)} placeholder="Describe your return/replacement policy..." rows={3} />
             </FormField>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField label="In-house Designer Available">
+              <FormField label="In-house Designer Available" required error={errors.inHouseDesignerAvailable}>
                 <div className="flex items-center gap-3">
-                  <Switch checked={form.inHouseDesignerAvailable} onCheckedChange={(checked) => updateField("inHouseDesignerAvailable", checked)} />
-                  <span className="text-sm text-muted-foreground">{form.inHouseDesignerAvailable ? "Yes" : "No"}</span>
+                  <Switch checked={form.inHouseDesignerAvailable === true} onCheckedChange={(checked) => updateField("inHouseDesignerAvailable", checked)} />
+                  <span className="text-sm text-muted-foreground">
+                    {form.inHouseDesignerAvailable === true ? "Yes" : form.inHouseDesignerAvailable === false ? "No" : "Not answered"}
+                  </span>
                 </div>
               </FormField>
-              <FormField label="Customer Location Visit Available">
+              <FormField label="Customer Location Visit Available" required error={errors.customerLocationVisitAvailable}>
                 <div className="flex items-center gap-3">
-                  <Switch checked={form.customerLocationVisitAvailable} onCheckedChange={(checked) => updateField("customerLocationVisitAvailable", checked)} />
-                  <span className="text-sm text-muted-foreground">{form.customerLocationVisitAvailable ? "Yes" : "No"}</span>
+                  <Switch checked={form.customerLocationVisitAvailable === true} onCheckedChange={(checked) => updateField("customerLocationVisitAvailable", checked)} />
+                  <span className="text-sm text-muted-foreground">
+                    {form.customerLocationVisitAvailable === true ? "Yes" : form.customerLocationVisitAvailable === false ? "No" : "Not answered"}
+                  </span>
                 </div>
               </FormField>
             </div>
-            <FormField label="Add-on Services">
-              <CheckboxGrid options={[...ADDON_SERVICE_OPTIONS, ...customServices]} selected={form.addonServices} onChange={(val) => updateField("addonServices", val)} columns={3} />
+            <FormField label="Add-on Services" error={errors.addonServices}>
+              <CheckboxGrid
+                options={ADDON_SERVICE_OPTIONS}
+                selected={form.addonServices}
+                onChange={(val) => updateField("addonServices", toggleOtherList(form.addonServices, ADDON_SERVICE_OPTIONS, val))}
+                columns={3}
+              />
+              {form.addonServices.includes("Other") && (
+                <div className="mt-2">
+                  <Input
+                    value={otherCustomOf(form.addonServices, ADDON_SERVICE_OPTIONS)}
+                    onChange={(e) => updateField("addonServices", setOtherCustomValue(form.addonServices, ADDON_SERVICE_OPTIONS, e.target.value))}
+                    placeholder="Enter custom add-on service"
+                  />
+                </div>
+              )}
             </FormField>
           </div>
         );
@@ -1470,19 +1757,33 @@ const VendorBusinessForm = () => {
                 <p className="text-sm text-muted-foreground">Display samples and file format preferences</p>
               </div>
             </div>
-            <FormField label="Sample / Display Available">
-              <div className="flex items-center gap-3">
-                <Switch checked={form.sampleDisplayAvailable} onCheckedChange={(checked) => updateField("sampleDisplayAvailable", checked)} />
-                <span className="text-sm text-muted-foreground">{form.sampleDisplayAvailable ? "Yes, we have samples" : "No samples available"}</span>
-              </div>
+            <FormField label="Sample / Display Available" required error={errors.sampleDisplayAvailable}>
+              <RadioCards
+                name="sampleDisplayAvailable"
+                options={[
+                  { value: "true", label: "Yes", desc: "We have samples / display materials available" },
+                  { value: "false", label: "No", desc: "No samples or display materials available" },
+                ]}
+                value={form.sampleDisplayAvailable === true ? "true" : form.sampleDisplayAvailable === false ? "false" : ""}
+                onChange={(val) => updateField("sampleDisplayAvailable", val === "true")}
+              />
             </FormField>
-            <FormField label="Preferred File Formats">
+            <FormField label="Preferred File Formats" required error={errors.preferredFileFormats}>
               <CheckboxGrid
                 options={FILE_FORMAT_OPTIONS}
                 selected={form.preferredFileFormats}
-                onChange={(val) => updateField("preferredFileFormats", val)}
+                onChange={(val) => updateField("preferredFileFormats", toggleOtherList(form.preferredFileFormats, FILE_FORMAT_OPTIONS, val))}
                 columns={3}
               />
+              {form.preferredFileFormats.includes("Other") && (
+                <div className="mt-2">
+                  <Input
+                    value={otherCustomOf(form.preferredFileFormats, FILE_FORMAT_OPTIONS)}
+                    onChange={(e) => updateField("preferredFileFormats", setOtherCustomValue(form.preferredFileFormats, FILE_FORMAT_OPTIONS, e.target.value))}
+                    placeholder="Enter your file format"
+                  />
+                </div>
+              )}
             </FormField>
           </div>
         );
@@ -1497,8 +1798,9 @@ const VendorBusinessForm = () => {
                 <p className="text-sm text-muted-foreground">Do you accept orders against a Purchase Order?</p>
               </div>
             </div>
-            <FormField label="Accept Purchase Orders without advance payment?">
+            <FormField label="Accept Purchase Orders without advance payment?" required error={errors.acceptsPurchaseOrder}>
               <RadioCards
+                name="acceptsPurchaseOrder"
                 options={[
                   { value: "true", label: "Yes", desc: "We accept PO-based orders without advance" },
                   { value: "false", label: "No", desc: "We require advance payment" },

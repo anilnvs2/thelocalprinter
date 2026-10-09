@@ -66,9 +66,11 @@ const baseNameOf = (url) => {
 
 /**
  * Composes the image + logo on a canvas.
- * `position` matches WatermarkLogo: "top-right" | "bottom-right" | "bottom-right-lg".
+ * The logo is drawn in the middle of the image (centred horizontally and
+ * vertically) with a low opacity, mirroring the on-screen overlay. A legacy
+ * `position` option is still accepted and ignored.
  */
-export const composeWatermarked = async (src, { position = "top-right", logoSrc = LOGO_SRC } = {}) => {
+export const composeWatermarked = async (src, { logoSrc = LOGO_SRC } = {}) => {
   const [image, logo] = await Promise.all([loadImageBytes(src), loadImageBytes(logoSrc)]);
 
   const width = image.width || image.naturalWidth;
@@ -91,19 +93,24 @@ export const composeWatermarked = async (src, { position = "top-right", logoSrc 
   const pad = Math.min(Math.max(width * 0.02, 8), 24);
   const platePad = pad * 0.75;
 
-  const x = position.includes("right") ? width - logoW - pad : pad;
-  const y = position.includes("bottom") ? height - logoH - pad : pad;
+  // Exact centre of the media: horizontal + vertical.
+  const x = (width - logoW) / 2;
+  const y = (height - logoH) / 2;
 
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.18)";
   ctx.shadowBlur = Math.max(2, width * 0.004);
   ctx.shadowOffsetY = 1;
-  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.fillStyle = "rgba(255,255,255,0.7)";
   roundRect(ctx, x - platePad, y - platePad, logoW + platePad * 2, logoH + platePad * 2, Math.max(4, logoW * 0.06));
   ctx.fill();
   ctx.restore();
 
+  // Low opacity so the watermark stays subtle.
+  ctx.save();
+  ctx.globalAlpha = 0.6;
   ctx.drawImage(logo, x, y, logoW, logoH);
+  ctx.restore();
   return canvas;
 };
 
@@ -126,7 +133,7 @@ const triggerDownload = (blob, filename) => {
  *
  * @returns {Promise<{watermarked: boolean}>}
  */
-export const downloadImageWithWatermark = async (src, { filename, position = "top-right", logoSrc = LOGO_SRC } = {}) => {
+export const downloadImageWithWatermark = async (src, { filename, logoSrc = LOGO_SRC } = {}) => {
   const outName =
     filename ||
     `${baseNameOf(src)}-the-local-printer.${extensionOf(src) === "png" ? "png" : "jpg"}`;
@@ -134,7 +141,7 @@ export const downloadImageWithWatermark = async (src, { filename, position = "to
   let watermarked = false;
   let canvas = null;
   try {
-    canvas = await composeWatermarked(src, { position, logoSrc });
+    canvas = await composeWatermarked(src, { logoSrc });
     watermarked = true;
   } catch (err) {
     console.warn("Watermark compose failed, downloading the original file:", err);

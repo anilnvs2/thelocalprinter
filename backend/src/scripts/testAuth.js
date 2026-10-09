@@ -73,6 +73,7 @@ test("User signup creates account and returns token", async () => {
     email: "user1@test.com",
     password: "User@123456",
     role: "USER",
+    whatsappNumber: "9876543210",
   });
   assert(res.status === 201, "status 201");
   assert(res.body.success === true, "success true");

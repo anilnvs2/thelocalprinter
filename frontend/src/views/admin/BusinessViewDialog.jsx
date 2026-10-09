@@ -281,8 +281,8 @@ const SlideshowViewer = ({ urls, label }) => {
 const ENUM_LABELS = {
   orderLimits: { single: "Single Order", minimum: "Minimum Order", bulk: "Bulk Orders", no_limit: "No Limit" },
   serviceType: { print_only: "Print Only", full_with_design: "Full Service (With Design)", full_without_design: "Full Service (Without Design)" },
-  customerType: { b2b: "B2B", b2c: "B2C", both: "Both B2B & B2C" },
-  orderingMethod: { on_call: "On Call", shop_visit: "Shop Visit", both: "Both" },
+  customerType: { b2b: "B2B", b2c: "B2C", both: "B2B and B2C" },
+  orderingMethod: { on_call: "On Call", shop_visit: "Shop Visit", both: "On Call and Shop Visit" },
 };
 
 const BusinessViewDialog = ({

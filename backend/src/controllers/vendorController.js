@@ -4,6 +4,7 @@ const Review = require("../models/Review");
 const Category = require("../models/Category");
 const Settings = require("../models/Settings");
 const { applyBusinessPatch } = require("../utils/businessPatch");
+const { validateBusinessPayload } = require("../utils/businessValidation");
 
 const hasDeleteRequest = (business) =>
   !!business.pendingChange && business.pendingChange.type === "DELETE";
@@ -184,7 +185,9 @@ exports.getBusinessById = async (req, res) => {
     const { id } = req.params;
 
     const business = await Business.findById(id)
-      .select("+googleBusinessProfileLink +gstNumber +fraudReport");
+      .select("+googleBusinessProfileLink +gstNumber +fraudReport")
+      .populate("categoryId", "name image")
+      .populate("serviceIds", "name");
 
     if (!business) {
       return res.status(404).json({
@@ -221,6 +224,15 @@ exports.createBusiness = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Business name is required",
+      });
+    }
+
+    const validationErrors = await validateBusinessPayload(data, { mode: "create" });
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: validationErrors.join(" "),
+        errors: validationErrors,
       });
     }
 
@@ -281,6 +293,7 @@ exports.createBusiness = async (req, res) => {
 
       // Section 13
       returnReplacementPolicy: data.returnReplacementPolicy || "",
+      replaceMistakesAtNoCharge: data.replaceMistakesAtNoCharge === "Yes" || data.replaceMistakesAtNoCharge === "No" ? data.replaceMistakesAtNoCharge : null,
       inHouseDesignerAvailable: data.inHouseDesignerAvailable || false,
       customerLocationVisitAvailable: data.customerLocationVisitAvailable || false,
       addonServices: data.addonServices || [],
@@ -345,6 +358,18 @@ exports.updateBusiness = async (req, res) => {
         success: false,
         message:
           "A delete request for this business is already waiting for admin approval. It must be reviewed first.",
+      });
+    }
+
+    const validationErrors = await validateBusinessPayload(data, {
+      mode: "update",
+      existing: business,
+    });
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: validationErrors.join(" "),
+        errors: validationErrors,
       });
     }
 

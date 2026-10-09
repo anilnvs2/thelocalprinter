@@ -166,7 +166,14 @@ const AdminUsers = () => {
       .slice(0, 2);
   };
 
-  const getEffectiveStatus = (u) => u.approvalStatus || "approved";
+  const getEffectiveStatus = (u) => {
+    // A reseller account is only "approved" once the admin has approved the
+    // reseller application; until then the row shows PENDING.
+    if (u.registrationType === "RESELLER" && u.resellerApprovalStatus) {
+      return u.resellerApprovalStatus.toLowerCase();
+    }
+    return u.approvalStatus || "approved";
+  };
 
   return (
     <div className="space-y-6">
