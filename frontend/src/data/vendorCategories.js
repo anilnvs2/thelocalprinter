@@ -65,8 +65,9 @@ export const STATIC_CATEGORIES = Object.entries(categoryDetails).map(([slug, det
 
 const norm = (s) => (s || "").trim().toLowerCase();
 
-/** Slugs of the 9 core categories. Admin can only add/delete their
- * subcategories — never edit, deactivate or delete the category itself. */
+/** Slugs of the 9 core categories. DB-backed core categories are fully
+ * editable/deletable from the admin; static-only entries (no DB document)
+ * carry isStatic:true so they cannot be edited or deleted. */
 export const CORE_CATEGORY_SLUGS = Object.keys(categoryDetails);
 
 /** T shirt keeps its hardcoded comparison table, so nothing may be added. */

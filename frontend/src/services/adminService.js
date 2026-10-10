@@ -233,8 +233,10 @@ export const approveResellerApplication = async (id) => {
 
 // ─── Reviews ───
 
-export const getAdminReviews = async (page = 1, search = "") => {
-  const response = await api.get("/admin/reviews", { params: { page, search } });
+export const getAdminReviews = async (page = 1, search = "", filters = {}) => {
+  const response = await api.get("/admin/reviews", {
+    params: { page, search, businessId: filters.businessId || "", rating: filters.rating || "" },
+  });
   return response.data;
 };
 

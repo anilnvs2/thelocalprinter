@@ -9,6 +9,7 @@ import { ChevronRight, Layers, Store, Search, Sun, Moon } from 'lucide-react';
 import { getActiveCategories, getPublicPosterBoys } from '@/services/userService';
 import { getSavedCity, onSavedLocationChange } from '@/lib/savedLocation';
 import { mergeCategories } from '@/data/vendorCategories';
+import { businessHref } from '@/lib/utils';
 import api from '@/services/api';
 
 export default function CategoryPage({ params }) {
@@ -284,7 +285,7 @@ export default function CategoryPage({ params }) {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {isStaffing
                 ? posterBoys.map((pb) => <PosterBoyCard key={pb._id} posterBoy={pb} detailHref={`/poster-boys/${pb._id}`} />)
-                : businesses.map((biz) => <UserBusinessCard key={biz._id} business={biz} detailHref={`/businesses/${biz._id}`} />)}
+                : businesses.map((biz) => <UserBusinessCard key={biz._id} business={biz} detailHref={businessHref(biz)} />)}
             </div>
           ) : (
             <div className={`flex flex-col items-center justify-center py-20 rounded-2xl border shadow-sm ${isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-brand-border'}`}>

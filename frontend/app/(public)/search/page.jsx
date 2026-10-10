@@ -16,6 +16,7 @@ import UserBusinessCard from '@/components/user/UserBusinessCard';
 import PosterBoyCard from '@/components/user/PosterBoyCard';
 import { searchPublicBusinesses, getPublicFilterOptions, getLocationAutocomplete, getPublicPosterBoys, getActiveCategories } from '@/services/userService';
 import { getSavedCity, clearLocation, onSavedLocationChange } from '@/lib/savedLocation';
+import { businessHref } from '@/lib/utils';
 
 // 0 = Off. Radius is opt-in: a city-level location (Near Me, typed city) must
 // list every business in that city, not only those within a few km of the
@@ -506,7 +507,7 @@ function SearchContent() {
                   <UserBusinessCard
                     key={biz._id}
                     business={biz}
-                    detailHref={`/businesses/${biz._id}`}
+                    detailHref={businessHref(biz)}
                   />
                 ))}
               </div>

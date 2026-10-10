@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Heart, Building2, MapPin, Trash2, Loader2 } from "lucide-react";
 import { getWishlist, removeFromWishlist } from "../../services/userService";
+import { businessHref } from "../../lib/utils";
 import { PageHeader } from "../../components/shared/page-header";
 import { EmptyState } from "../../components/shared/empty-state";
 import { PageLoader } from "../../components/shared/page-loader";
@@ -70,7 +71,7 @@ const UserWishlist = () => {
                   <CardContent className="p-0">
                     <div className="flex items-center gap-4 p-4">
                       <div
-                        onClick={() => router.push(`/user/businesses/${b._id}`)}
+                        onClick={() => router.push(businessHref(b, "/user/businesses"))}
                         className="w-16 h-16 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-950/30 dark:to-indigo-950/30 flex items-center justify-center text-primary flex-shrink-0 cursor-pointer overflow-hidden"
                       >
                         {b.verificationMedia?.outdoorStoreImage || b.verificationMedia?.indoorStoreImage ? (
@@ -79,7 +80,7 @@ const UserWishlist = () => {
                           <Building2 size={24} />
                         )}
                       </div>
-                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => router.push(`/user/businesses/${b._id}`)}>
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => router.push(businessHref(b, "/user/businesses"))}>
                         <h3 className="text-sm font-bold text-foreground truncate">{b.name}</h3>
                         {b.vendor?.publicId && (
                           <CopyableId id={b.vendor.publicId} />

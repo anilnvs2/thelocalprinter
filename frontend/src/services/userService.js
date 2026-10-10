@@ -50,6 +50,11 @@ export const getBusinessReviews = async (businessId, page = 1) => {
   return response.data;
 };
 
+export const getPublicBusinessReviews = async (businessId, page = 1) => {
+  const response = await api.get(`/user/public/businesses/${businessId}/reviews`, { params: { page } });
+  return response.data;
+};
+
 export const getMyReview = async (businessId) => {
   const response = await api.get(`/user/businesses/${businessId}/my-review`);
   return response.data;

@@ -19,6 +19,7 @@ const {
 const {
   createReview,
   getBusinessReviews,
+  getPublicBusinessReviews,
   getMyReview,
   updateReview,
   deleteReview,
@@ -51,6 +52,7 @@ router.get("/public/locations/autocomplete", getLocationAutocomplete);
 router.get("/public/businesses", getPublicBusinesses);
 router.get("/public/businesses/filters", getFilterOptions);
 router.get("/public/businesses/:id", getBusinessById);
+router.get("/public/businesses/:businessId/reviews", getPublicBusinessReviews);
 
 router.get("/public/poster-boys", getPublicPosterBoys);
 router.get("/public/poster-boys/:id", getPublicPosterBoyById);

@@ -12,6 +12,7 @@ import {
   addToWishlist,
   removeFromWishlist,
 } from "../../services/userService";
+import { businessHref } from "../../lib/utils";
 import { PageHeader } from "../../components/shared/page-header";
 import { PageLoader } from "../../components/shared/page-loader";
 import { Card, CardContent } from "../../components/ui/card";
@@ -275,7 +276,7 @@ const UserExplore = () => {
               <UserBusinessCard
                 key={b._id}
                 business={b}
-                detailHref={`/user/businesses/${b._id}`}
+                detailHref={businessHref(b, "/user/businesses")}
                 showWishlist
                 wishlisted={wishlistedIds.has(b._id)}
                 togglingWishlist={togglingWishlist === b._id}

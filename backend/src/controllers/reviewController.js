@@ -59,45 +59,45 @@ exports.createReview = async (req, res) => {
   }
 };
 
-exports.getBusinessReviews = async (req, res) => {
+const buildBusinessReviewsPayload = async (businessId, page, limit) => {
+  const skip = (page - 1) * limit;
+  const query = { business: businessId, isVisible: true };
+
+  const [reviews, total, allRatings] = await Promise.all([
+    Review.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("user", "fullName"),
+    Review.countDocuments(query),
+    Review.find({ business: businessId, isVisible: true }).select("rating").lean(),
+  ]);
+
+  const summary = { averageRating: 0, reviewCount: total, ratingBreakdown: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
+  if (allRatings.length > 0) {
+    const sum = allRatings.reduce((acc, r) => acc + r.rating, 0);
+    summary.averageRating = Math.round((sum / allRatings.length) * 10) / 10;
+    allRatings.forEach((r) => {
+      summary.ratingBreakdown[r.rating] = (summary.ratingBreakdown[r.rating] || 0) + 1;
+    });
+  }
+
+  return {
+    reviews,
+    summary,
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+  };
+};
+
+const sendBusinessReviews = async (req, res) => {
   try {
     const { businessId } = req.params;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
 
-    const query = { business: businessId, isVisible: true };
+    const payload = await buildBusinessReviewsPayload(businessId, page, limit);
 
-    const [reviews, total, allRatings] = await Promise.all([
-      Review.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .populate("user", "fullName"),
-      Review.countDocuments(query),
-      Review.find({ business: businessId, isVisible: true }).select("rating").lean(),
-    ]);
-
-    const summary = { averageRating: 0, reviewCount: total, ratingBreakdown: {1:0,2:0,3:0,4:0,5:0} };
-    if (allRatings.length > 0) {
-      const sum = allRatings.reduce((acc, r) => acc + r.rating, 0);
-      summary.averageRating = Math.round((sum / allRatings.length) * 10) / 10;
-      allRatings.forEach((r) => { summary.ratingBreakdown[r.rating] = (summary.ratingBreakdown[r.rating] || 0) + 1; });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: {
-        reviews,
-        summary,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit),
-        },
-      },
-    });
+    res.status(200).json({ success: true, data: payload });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -105,6 +105,11 @@ exports.getBusinessReviews = async (req, res) => {
     });
   }
 };
+
+exports.getBusinessReviews = sendBusinessReviews;
+
+// Unauthenticated: lets public visitors read a business's reviews + summary.
+exports.getPublicBusinessReviews = sendBusinessReviews;
 
 exports.getMyReview = async (req, res) => {
   try {
@@ -214,7 +219,9 @@ exports.getVendorReviews = async (req, res) => {
     const businessIds = vendorBusinesses.map((b) => b._id);
 
     const query = { business: { $in: businessIds }, isVisible: true };
-    if (businessFilter) query.business = businessFilter;
+    if (businessFilter && businessIds.some((id) => id.toString() === businessFilter)) {
+      query.business = businessFilter;
+    }
     if (ratingFilter) query.rating = parseInt(ratingFilter);
     if (search) {
       const matchingUsers = await require("../models/User").find({
@@ -319,13 +326,25 @@ exports.getAdminReviews = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
     const search = req.query.search || "";
+    const businessId = req.query.businessId || "";
+    const ratingFilter = req.query.rating || "";
 
     const query = {};
+    if (businessId) query.business = businessId;
+    if (ratingFilter) query.rating = parseInt(ratingFilter);
     if (search) {
-      const matchingUsers = await require("../models/User").find({
-        fullName: { $regex: search, $options: "i" },
-      }).select("_id");
-      query.user = { $in: matchingUsers.map((u) => u._id) };
+      const [matchingUsers, matchingBusinesses] = await Promise.all([
+        require("../models/User").find({
+          fullName: { $regex: search, $options: "i" },
+        }).select("_id"),
+        Business.find({
+          name: { $regex: search, $options: "i" },
+        }).select("_id"),
+      ]);
+      query.$or = [
+        { user: { $in: matchingUsers.map((u) => u._id) } },
+        { business: { $in: matchingBusinesses.map((b) => b._id) } },
+      ];
     }
 
     const [reviews, total] = await Promise.all([

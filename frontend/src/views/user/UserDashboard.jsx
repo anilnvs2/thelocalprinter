@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { getUserDashboard, getFilterOptions, getPublicBusinesses, addToWishlist, removeFromWishlist } from "../../services/userService";
+import { businessHref } from "../../lib/utils";
 import { PageLoader } from "../../components/shared/page-loader";
 import { Card, CardContent } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
@@ -393,7 +394,7 @@ const UserDashboard = () => {
                 <UserBusinessCard
                   key={b._id}
                   business={b}
-                  detailHref={`/user/businesses/${b._id}`}
+                  detailHref={businessHref(b, "/user/businesses")}
                   showWishlist
                   wishlisted={isWishlisted(b)}
                   togglingWishlist={togglingWishlistId === b._id}
@@ -451,7 +452,7 @@ const UserDashboard = () => {
                 <UserBusinessCard
                   key={b._id}
                   business={b}
-                  detailHref={`/user/businesses/${b._id}`}
+                  detailHref={businessHref(b, "/user/businesses")}
                   showWishlist
                   wishlisted={isWishlisted(b)}
                   togglingWishlist={togglingWishlistId === b._id}
@@ -496,7 +497,7 @@ const UserDashboard = () => {
               <UserBusinessCard
                 key={b._id}
                 business={b}
-                detailHref={`/user/businesses/${b._id}`}
+                detailHref={businessHref(b, "/user/businesses")}
                 showWishlist
                 wishlisted={isWishlisted(b)}
                 togglingWishlist={togglingWishlistId === b._id}

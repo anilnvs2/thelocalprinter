@@ -34,6 +34,7 @@ import { EmptyState } from "../../components/shared/empty-state";
 import { PageLoader } from "../../components/shared/page-loader";
 import { Card, CardContent } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
+import { Textarea } from "../../components/ui/textarea";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { Label } from "../../components/ui/label";
@@ -301,6 +302,7 @@ const AdminCategories = () => {
           await updateSubcategory(editing._id, {
             name: form.name.trim(),
             parentId: form.parentId,
+            description: form.description,
           });
         } else {
           await updateCategory(editing._id, {
@@ -452,7 +454,7 @@ const AdminCategories = () => {
                     <TableHead className="hidden sm:table-cell">URL</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="hidden sm:table-cell">Created</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
+                    <TableHead className="w-[110px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -564,87 +566,104 @@ const AdminCategories = () => {
                           {formatDate(cat.createdAt)}
                         </TableCell>
                         <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <span className="sr-only">Actions</span>
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="h-4 w-4"
+                          <div className="flex items-center justify-end gap-0.5">
+                            {!cat.isStatic && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  title="Edit category"
+                                  onClick={() => openEdit(cat, "parent")}
                                 >
-                                  <circle cx="12" cy="12" r="1" />
-                                  <circle cx="12" cy="5" r="1" />
-                                  <circle cx="12" cy="19" r="1" />
-                                </svg>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => setViewTarget(cat)}>
-                                <Eye className="mr-2 h-4 w-4" />
-                                View
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <Link
-                                  href={`/categories/${cat.slug}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  title="Delete category"
+                                  disabled={actionLoading === cat._id}
+                                  onClick={() => {
+                                    setDeleteTarget(cat);
+                                    setDeleteType("parent");
+                                  }}
                                 >
-                                  <ExternalLink className="mr-2 h-4 w-4" />
-                                  Open Public Page
-                                </Link>
-                              </DropdownMenuItem>
-                              {!cat.isStatic && !isCoreCategory(cat.slug) && (
-                                <>
-                                  <DropdownMenuItem onClick={() => openEdit(cat, "parent")}>
-                                    <Edit2 className="mr-2 h-4 w-4" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => openCreateSubcategory(cat)}>
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    Add Subcategory
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleToggle(cat._id)}
-                                    disabled={actionLoading === cat._id}
+                                  {actionLoading === cat._id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </>
+                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <span className="sr-only">Actions</span>
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="h-4 w-4"
                                   >
-                                    {actionLoading === cat._id ? (
-                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Power className="mr-2 h-4 w-4" />
+                                    <circle cx="12" cy="12" r="1" />
+                                    <circle cx="12" cy="5" r="1" />
+                                    <circle cx="12" cy="19" r="1" />
+                                  </svg>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => setViewTarget(cat)}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  View
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link
+                                    href={`/categories/${cat.slug}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <ExternalLink className="mr-2 h-4 w-4" />
+                                    Open Public Page
+                                  </Link>
+                                </DropdownMenuItem>
+                                {!cat.isStatic && (
+                                  <>
+                                    {cat.slug !== LOCKED_CATEGORY_SLUG && (
+                                      <DropdownMenuItem onClick={() => openCreateSubcategory(cat)}>
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Add Subcategory
+                                      </DropdownMenuItem>
                                     )}
-                                    {cat.isActive ? "Deactivate" : "Activate"}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={() => {
-                                      setDeleteTarget(cat);
-                                      setDeleteType("parent");
-                                    }}
-                                    disabled={actionLoading === cat._id}
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                              {isCoreCategory(cat.slug) &&
-                                cat.slug !== LOCKED_CATEGORY_SLUG && (
-                                  <DropdownMenuItem
-                                    onClick={() => openCreateSubcategory(cat)}
-                                  >
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    Add Subcategory
-                                  </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => handleToggle(cat._id)}
+                                      disabled={actionLoading === cat._id}
+                                    >
+                                      {actionLoading === cat._id ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Power className="mr-2 h-4 w-4" />
+                                      )}
+                                      {cat.isActive ? "Deactivate" : "Activate"}
+                                    </DropdownMenuItem>
+                                  </>
                                 )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                                {cat.isStatic &&
+                                  isCoreCategory(cat.slug) &&
+                                  cat.slug !== LOCKED_CATEGORY_SLUG && (
+                                    <DropdownMenuItem onClick={() => openCreateSubcategory(cat)}>
+                                      <Plus className="mr-2 h-4 w-4" />
+                                      Add Subcategory
+                                    </DropdownMenuItem>
+                                  )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </TableCell>
                       </TableRow>
                       {expandedRows[cat._id] &&
@@ -686,59 +705,91 @@ const AdminCategories = () => {
                               {formatDate(sub.createdAt)}
                             </TableCell>
                             <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <span className="sr-only">Actions</span>
-                                    <svg
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      className="h-4 w-4"
+                              <div className="flex items-center justify-end gap-0.5">
+                                {!sub.isStatic && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      title="Edit subcategory"
+                                      onClick={() => openEdit(sub, "subcategory")}
                                     >
-                                      <circle cx="12" cy="12" r="1" />
-                                      <circle cx="12" cy="5" r="1" />
-                                      <circle cx="12" cy="19" r="1" />
-                                    </svg>
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem asChild>
-                                    <Link
-                                      href={`/categories/${cat.slug}/${sub.slug}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:text-destructive"
+                                      title="Delete subcategory"
+                                      disabled={actionLoading === sub._id}
+                                      onClick={() => {
+                                        setDeleteTarget(sub);
+                                        setDeleteType("subcategory");
+                                      }}
                                     >
-                                      <ExternalLink className="mr-2 h-4 w-4" />
-                                      Open Public Page
-                                    </Link>
-                                  </DropdownMenuItem>
-                                  {!sub.isStatic && (
-                                    <>
-                                      <DropdownMenuItem onClick={() => openEdit(sub, "subcategory")}>
-                                        <Edit2 className="mr-2 h-4 w-4" />
-                                        Edit
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        className="text-destructive focus:text-destructive"
-                                        onClick={() => {
-                                          setDeleteTarget(sub);
-                                          setDeleteType("subcategory");
-                                        }}
-                                        disabled={actionLoading === sub._id}
+                                      {actionLoading === sub._id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </>
+                                )}
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                      <span className="sr-only">Actions</span>
+                                      <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        className="h-4 w-4"
                                       >
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Delete
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                                        <circle cx="12" cy="12" r="1" />
+                                        <circle cx="12" cy="5" r="1" />
+                                        <circle cx="12" cy="19" r="1" />
+                                      </svg>
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem asChild>
+                                      <Link
+                                        href={`/categories/${cat.slug}/${sub.slug}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                        Open Public Page
+                                      </Link>
+                                    </DropdownMenuItem>
+                                    {!sub.isStatic && (
+                                      <>
+                                        <DropdownMenuItem onClick={() => openEdit(sub, "subcategory")}>
+                                          <Edit2 className="mr-2 h-4 w-4" />
+                                          Edit
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          className="text-destructive focus:text-destructive"
+                                          onClick={() => {
+                                            setDeleteTarget(sub);
+                                            setDeleteType("subcategory");
+                                          }}
+                                          disabled={actionLoading === sub._id}
+                                        >
+                                          <Trash2 className="mr-2 h-4 w-4" />
+                                          Delete
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -909,6 +960,19 @@ const AdminCategories = () => {
               </div>
             )}
 
+            {!(editingType === "subcategory" && !editing) && (
+              <div className="space-y-2">
+                <Label htmlFor="cat-description">Description</Label>
+                <Textarea
+                  id="cat-description"
+                  value={form.description}
+                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                  placeholder="Short description shown on the public category page..."
+                  rows={3}
+                />
+              </div>
+            )}
+
             {editingType === "parent" && (
               <div className="space-y-2">
                 <Label htmlFor="cat-kind">Category Kind</Label>
@@ -1000,7 +1064,8 @@ const AdminCategories = () => {
               Are you sure you want to delete <strong>{deleteTarget?.name}</strong>?
               {deleteType === "parent" &&
                 " This will also delete all subcategories under it."}{" "}
-              This action cannot be undone.
+              Businesses and poster boys using it will be unlinked. This action
+              cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

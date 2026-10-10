@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import {
   getBusinessDetails, getPublicBusinessDetails, addToWishlist, removeFromWishlist,
-  getBusinessReviews, getMyReview, createReview, updateReview, deleteReview,
+  getBusinessReviews, getPublicBusinessReviews, getMyReview, createReview, updateReview, deleteReview,
 } from "../../services/userService";
 import { PageLoader } from "../../components/shared/page-loader";
 import { Button } from "../../components/ui/button";
@@ -22,6 +22,7 @@ import CopyableId from "../../components/admin/CopyableId";
 import WatermarkLogo from "../../components/media/WatermarkLogo";
 import ProtectedVideo from "../../components/media/ProtectedVideo";
 import { useAuth } from "../../context/AuthContext";
+import { extractBusinessId } from "../../lib/utils";
 
 const ProfileSection = ({ title, icon: Icon, children }) => (
   <section className="py-7 sm:py-8">
@@ -252,10 +253,14 @@ const fmtTime = (t) => {
 };
 
 const UserBusinessDetails = ({ publicMode = false }) => {
-  const { id } = useParams();
+  // Route param may be a plain id or a pretty "{name-slug}-{id}" — extract the id.
+  const { id: businessParam } = useParams();
+  const id = extractBusinessId(businessParam);
   const router = useRouter();
   const { user } = useAuth();
   const isUserRole = !publicMode && user?.role === "USER";
+  // Any logged-in USER can write a review, on the public page or the user page.
+  const canReview = user?.role === "USER";
   // USER-facing privacy: GST + restricted verification media stay hidden for
   // logged-in USERs and for public (logged-out) visitors alike.
   const hidePrivate = publicMode || isUserRole;
@@ -325,12 +330,14 @@ const UserBusinessDetails = ({ publicMode = false }) => {
   }, [id, publicMode]);
 
   useEffect(() => {
-    if (id && !publicMode) {
-      getBusinessReviews(id, reviewPage).then((res) => {
-        setReviews(res.data.reviews);
-        setReviewSummary(res.data.summary || { averageRating: 0, reviewCount: 0, ratingBreakdown: {1:0,2:0,3:0,4:0,5:0} });
-        setReviewPagination(res.data.pagination);
-      }).catch(() => {});
+    if (!id) return;
+    const fetchReviews = publicMode ? getPublicBusinessReviews : getBusinessReviews;
+    fetchReviews(id, reviewPage).then((res) => {
+      setReviews(res.data.reviews);
+      setReviewSummary(res.data.summary || { averageRating: 0, reviewCount: 0, ratingBreakdown: {1:0,2:0,3:0,4:0,5:0} });
+      setReviewPagination(res.data.pagination);
+    }).catch(() => {});
+    if (user?.role === "USER") {
       getMyReview(id).then((res) => {
         setMyReview(res.data.review);
         if (res.data.review) {
@@ -338,8 +345,10 @@ const UserBusinessDetails = ({ publicMode = false }) => {
           setReviewComment(res.data.review.comment);
         }
       }).catch(() => {});
+    } else {
+      setMyReview(null);
     }
-  }, [id, reviewPage, submittingReview, publicMode]);
+  }, [id, reviewPage, submittingReview, publicMode, user?.role]);
 
   const handleWishlist = async () => {
     setTogglingWishlist(true);
@@ -871,7 +880,6 @@ const UserBusinessDetails = ({ publicMode = false }) => {
         )}
       </div>
 
-      {!publicMode && (
       <section className="py-7 sm:py-8">
         <div className="flex flex-row items-center justify-between mb-4 gap-2 flex-wrap">
           <div className="flex items-center gap-2.5">
@@ -880,13 +888,23 @@ const UserBusinessDetails = ({ publicMode = false }) => {
             </span>
             <h2 className="text-base sm:text-lg font-bold text-foreground">Customer Reviews</h2>
           </div>
-          {!myReview && (
-            <Button size="sm" className="gap-1.5" onClick={() => { setShowReviewForm(!showReviewForm); setEditingReview(false); setReviewComment(""); setReviewRating(0); }}>
+          {canReview && !myReview && (
+            <Button size="sm" className="gap-1.5" onClick={() => { setShowReviewForm(!showReviewForm); setEditingReview(false); setReviewComment(""); setReviewRating(0); setReviewError(""); setReviewSuccess(""); }}>
               <MessageSquare size={14} /> Write a Review
+            </Button>
+          )}
+          {!canReview && (
+            <Button size="sm" variant="outline" className="gap-1.5" asChild>
+              <a href="/login">
+                <Edit2 size={14} /> Login to Write a Review
+              </a>
             </Button>
           )}
         </div>
         <div className="space-y-4">
+          {reviewSuccess && !showReviewForm && (
+            <p className="text-xs text-emerald-600">{reviewSuccess}</p>
+          )}
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
             <div className="text-center min-w-[100px]">
               <p className="text-4xl font-extrabold text-foreground">{reviewSummary.averageRating}</p>
@@ -978,7 +996,6 @@ const UserBusinessDetails = ({ publicMode = false }) => {
           )}
         </div>
       </section>
-      )}
         </div>
       </article>
       </div>

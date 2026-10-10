@@ -1129,12 +1129,25 @@ exports.deleteCategory = async (req, res) => {
       });
     }
 
+    let subIds = [];
     if (category.type === "parent") {
-      const subCount = await Category.countDocuments({ parentId: id });
-      if (subCount > 0) {
+      const subs = await Category.find({ parentId: id }).select("_id");
+      subIds = subs.map((s) => s._id);
+      if (subIds.length > 0) {
         await Category.deleteMany({ parentId: id });
       }
     }
+
+    // Unlink the category (and its subcategories) from businesses and
+    // poster-boy profiles so no dangling ObjectIds are left behind.
+    const PosterBoyProfile = require("../models/PosterBoyProfile");
+    const removedIds = [category._id, ...subIds];
+    await Promise.all([
+      Business.updateMany({ categoryId: category._id }, { $set: { categoryId: null } }),
+      PosterBoyProfile.updateMany({ categoryId: category._id }, { $set: { categoryId: null } }),
+      Business.updateMany({ serviceIds: { $in: removedIds } }, { $pull: { serviceIds: { $in: removedIds } } }),
+      PosterBoyProfile.updateMany({ skillIds: { $in: removedIds } }, { $pull: { skillIds: { $in: removedIds } } }),
+    ]);
 
     await Category.findByIdAndDelete(id);
 
@@ -1214,7 +1227,7 @@ exports.createSubcategory = async (req, res) => {
 exports.updateSubcategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, parentId } = req.body;
+    const { name, parentId, description } = req.body;
 
     const subcategory = await Category.findById(id);
     if (!subcategory || subcategory.type !== "subcategory") {
@@ -1249,6 +1262,10 @@ exports.updateSubcategory = async (req, res) => {
       subcategory.name = name.trim();
     }
 
+    if (description !== undefined) {
+      subcategory.description = description;
+    }
+
     await subcategory.save();
 
     res.status(200).json({
@@ -1281,6 +1298,13 @@ exports.deleteSubcategory = async (req, res) => {
         message: "Subcategory not found",
       });
     }
+
+    // Unlink from businesses (serviceIds) and poster-boy profiles (skillIds)
+    const PosterBoyProfile = require("../models/PosterBoyProfile");
+    await Promise.all([
+      Business.updateMany({ serviceIds: id }, { $pull: { serviceIds: id } }),
+      PosterBoyProfile.updateMany({ skillIds: id }, { $pull: { skillIds: id } }),
+    ]);
 
     await Category.findByIdAndDelete(id);
 

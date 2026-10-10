@@ -14,7 +14,7 @@ import {
   Heart,
   CreditCard,
 } from "lucide-react";
-import { getAdminReviews, toggleReviewVisibility } from "../../services/adminService";
+import { getAdminReviews, toggleReviewVisibility, getBusinesses } from "../../services/adminService";
 import { PageHeader } from "../../components/shared/page-header";
 import { EmptyState } from "../../components/shared/empty-state";
 import { PageLoader } from "../../components/shared/page-loader";
@@ -37,6 +37,13 @@ import {
   DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "../../components/ui/avatar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 
 const RatingStars = ({ rating }) => (
   <div className="flex items-center gap-0.5">
@@ -65,13 +72,17 @@ const AdminReviews = () => {
   const [page, setPage] = useState(1);
   const [actionLoading, setActionLoading] = useState(null);
   const [error, setError] = useState("");
+  const [businessFilter, setBusinessFilter] = useState("all");
+  const [ratingFilter, setRatingFilter] = useState("all");
+  const [businesses, setBusinesses] = useState([]);
   const debounceRef = useRef(null);
+  const filtersRef = useRef({ search: "", businessId: "", rating: "" });
 
-  const fetchReviews = async (p = 1, s = "") => {
+  const fetchReviews = async (p = 1, s = "", businessId = "", rating = "") => {
     setLoading(true);
     setError("");
     try {
-      const res = await getAdminReviews(p, s);
+      const res = await getAdminReviews(p, s, { businessId, rating });
       setReviews(res.data.reviews);
       setPagination(res.data.pagination);
     } catch (err) {
@@ -82,7 +93,13 @@ const AdminReviews = () => {
   };
 
   useEffect(() => {
-    fetchReviews(page, search);
+    getBusinesses(1, "", "", "", 200)
+      .then((res) => setBusinesses(res.data.businesses || []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchReviews(page, filtersRef.current.search, filtersRef.current.businessId, filtersRef.current.rating);
   }, [page]);
 
   const handleSearchChange = (e) => {
@@ -90,16 +107,34 @@ const AdminReviews = () => {
     setSearch(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      filtersRef.current = { ...filtersRef.current, search: value };
       setPage(1);
-      fetchReviews(1, value);
+      fetchReviews(1, value, filtersRef.current.businessId, filtersRef.current.rating);
     }, 400);
   };
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    filtersRef.current = { ...filtersRef.current, search };
     setPage(1);
-    fetchReviews(1, search);
+    fetchReviews(1, search, filtersRef.current.businessId, filtersRef.current.rating);
+  };
+
+  const handleBusinessFilter = (value) => {
+    setBusinessFilter(value);
+    const businessId = value === "all" ? "" : value;
+    filtersRef.current = { ...filtersRef.current, businessId };
+    setPage(1);
+    fetchReviews(1, filtersRef.current.search, businessId, filtersRef.current.rating);
+  };
+
+  const handleRatingFilter = (value) => {
+    setRatingFilter(value);
+    const rating = value === "all" ? "" : value;
+    filtersRef.current = { ...filtersRef.current, rating };
+    setPage(1);
+    fetchReviews(1, filtersRef.current.search, filtersRef.current.businessId, rating);
   };
 
   const handleToggleVisibility = async (id) => {
@@ -156,13 +191,39 @@ const AdminReviews = () => {
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search by reviewer name..."
+                placeholder="Search by reviewer or business name..."
                 value={search}
                 onChange={handleSearchChange}
                 onSubmit={handleSearchSubmit}
                 className="pl-9"
               />
             </div>
+            <Select value={businessFilter} onValueChange={handleBusinessFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Businesses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Businesses</SelectItem>
+                {businesses.map((b) => (
+                  <SelectItem key={b._id} value={b._id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={ratingFilter} onValueChange={handleRatingFilter}>
+              <SelectTrigger className="w-[130px]">
+                <SelectValue placeholder="All Ratings" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Ratings</SelectItem>
+                {[5, 4, 3, 2, 1].map((r) => (
+                  <SelectItem key={r} value={String(r)}>
+                    {r} Star{r !== 1 ? "s" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {pagination && (
               <span className="text-sm text-muted-foreground whitespace-nowrap">
                 {pagination.total} review{pagination.total !== 1 ? "s" : ""}
