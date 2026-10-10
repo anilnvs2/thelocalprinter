@@ -4,8 +4,12 @@
 
 const LOCATION_KEY = "tlp_location";
 const MANUAL_KEY = "tlp_location_manual";
-const GEO_ATTEMPT_KEY = "tlp_geo_attempted";
 const EVENT_NAME = "tlp-location-changed";
+
+// Auto-detect happens at most once per page load. Kept in memory (NOT
+// localStorage) on purpose: clearing the field blocks detection for the rest
+// of this visit, while a reload/refresh starts fresh and detects again.
+let geoAttempted = false;
 
 const canUseDom = () => typeof window !== "undefined";
 
@@ -78,13 +82,14 @@ export function saveManualLocation(city, origin = "") {
 }
 
 // Manual clear (visitor emptied the field / cleared filters): drop the saved
-// location AND the manual + geo-attempt flags so auto-detection runs again.
+// location AND the manual flag. Auto-detection is blocked for the rest of this
+// page load (geoAttempted), but a reload/refresh starts fresh and detects again.
 export function clearLocation(origin = "") {
   if (!canUseDom()) return;
+  geoAttempted = true;
   try {
     window.localStorage.removeItem(LOCATION_KEY);
     window.localStorage.removeItem(MANUAL_KEY);
-    window.localStorage.removeItem(GEO_ATTEMPT_KEY);
   } catch {
     /* noop */
   }
@@ -101,21 +106,11 @@ export function isManualLocation() {
 }
 
 export function hasGeoAttempt() {
-  if (!canUseDom()) return false;
-  try {
-    return window.localStorage.getItem(GEO_ATTEMPT_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return geoAttempted;
 }
 
 export function markGeoAttempt() {
-  if (!canUseDom()) return;
-  try {
-    window.localStorage.setItem(GEO_ATTEMPT_KEY, "1");
-  } catch {
-    /* noop */
-  }
+  geoAttempted = true;
 }
 
 export function onSavedLocationChange(handler) {

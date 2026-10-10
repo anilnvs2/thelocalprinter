@@ -129,9 +129,10 @@ export default function Header() {
     return () => window.removeEventListener('near-me-location', onNearMeLocation);
   }, []);
 
-  // Detect once from the browser when no saved location exists (first visit,
-  // or after the visitor cleared it). Marked before asking so a remount never
-  // re-prompts.
+  // Detect once per page load when no saved location exists (first visit, or
+  // a reload after the visitor cleared it). Marked before asking so a remount
+  // never re-prompts; clearing the field marks it too, so the visitor is never
+  // forced back into auto-detect within the same visit.
   const runAutoDetect = useCallback(() => {
     if (isManualLocation() || hasGeoAttempt()) return;
     markGeoAttempt();
@@ -162,19 +163,20 @@ export default function Header() {
   }, [runAutoDetect]);
 
   // Keep the mobile field in sync when the desktop field (or another tab)
-  // changes it — and re-detect when the visitor cleared the location.
+  // changes it. A clear (reset) never re-triggers auto-detection: the visitor
+  // removed it on purpose, so they type it themselves. A reload/refresh
+  // starts fresh and detects again.
   useEffect(() => {
-    const off = onSavedLocationChange(({ city, origin, reset }) => {
+    const off = onSavedLocationChange(({ city, origin }) => {
       if (origin !== locationOriginRef.current) {
         setLocationInput(city);
         mobileLocationMetaRef.current = null;
         setShowMobileLocationSuggestions(false);
         setMobileLocationSuggestions([]);
       }
-      if (reset) runAutoDetect();
     });
     return off;
-  }, [runAutoDetect]);
+  }, []);
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
