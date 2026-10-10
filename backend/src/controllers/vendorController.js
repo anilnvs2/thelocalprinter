@@ -184,6 +184,8 @@ exports.getBusinessById = async (req, res) => {
     const vendorId = req.user.userId;
     const { id } = req.params;
 
+    // Only the owner may read this (checked below), so a vendor always sees
+    // their own fraud / hotlist report — nobody else's.
     const business = await Business.findById(id)
       .select("+googleBusinessProfileLink +gstNumber +fraudReport")
       .populate("categoryId", "name image")
@@ -305,16 +307,27 @@ exports.createBusiness = async (req, res) => {
       // Section 15
       acceptsPurchaseOrder: data.acceptsPurchaseOrder || false,
 
-      // Section 16
-      fraudReport: data.fraudReport || {},
+      // Section 16 — only non-empty entries are kept; the report is never
+      // returned to the vendor again (admin-only from here on).
+      fraudReport: (Array.isArray(data.fraudReport) ? data.fraudReport : [])
+        .map((entry) => ({
+          contactName: String(entry?.contactName || "").trim(),
+          designation: String(entry?.designation || "").trim(),
+          contactNumber: String(entry?.contactNumber || "").trim(),
+        }))
+        .filter((entry) => entry.contactName || entry.designation || entry.contactNumber),
     };
 
     const business = await Business.create(businessData);
 
+    // Do not echo the fraud / hotlist report back to the vendor.
+    const businessView = business.toObject();
+    delete businessView.fraudReport;
+
     res.status(201).json({
       success: true,
       message: "Business created successfully. Pending admin approval.",
-      data: { business },
+      data: { business: businessView },
     });
   } catch (error) {
     res.status(500).json({
@@ -344,7 +357,18 @@ exports.updateBusiness = async (req, res) => {
       });
     }
 
-    const data = req.body;
+    const data = { ...req.body };
+    // Vendors may edit their own fraud / hotlist report, but only non-empty
+    // entries are stored (blank rows from the form are dropped).
+    if (data.fraudReport !== undefined) {
+      data.fraudReport = (Array.isArray(data.fraudReport) ? data.fraudReport : [])
+        .map((entry) => ({
+          contactName: String(entry?.contactName || "").trim(),
+          designation: String(entry?.designation || "").trim(),
+          contactNumber: String(entry?.contactNumber || "").trim(),
+        }))
+        .filter((entry) => entry.contactName || entry.designation || entry.contactNumber);
+    }
 
     if (data.name !== undefined && (!data.name || !String(data.name).trim())) {
       return res.status(400).json({

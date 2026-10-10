@@ -94,6 +94,15 @@ export const toggleBusinessStatus = async (id) => {
   return response.data;
 };
 
+// Optional, ADMIN-managed Brand Recall / Trust Score for one business.
+// Pass null (or "") to remove the score.
+export const updateBusinessTrustScore = async (id, brandRecallScore) => {
+  const response = await api.patch(`/admin/businesses/${id}/trust-score`, {
+    brandRecallScore,
+  });
+  return response.data;
+};
+
 // ─── Approvals ───
 
 export const getPendingApprovals = async (page = 1) => {
@@ -126,9 +135,9 @@ export const updateProfileChangeStatus = async (id, status) => {
 
 // ─── Poster Boys ───
 
-export const getPosterBoys = async (page = 1, search = "") => {
+export const getPosterBoys = async (page = 1, search = "", accountStatus = "") => {
   const response = await api.get("/admin/poster-boys", {
-    params: { page, search },
+    params: { page, search, ...(accountStatus ? { accountStatus } : {}) },
   });
   return response.data;
 };

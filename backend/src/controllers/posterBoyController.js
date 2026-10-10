@@ -14,6 +14,11 @@ const WORK_MEDIA_MAX = 10;
 const ADDRESS_MIN = 5;
 const ADDRESS_MAX = 300;
 
+const WORK_RADIUS_OPTIONS = ["10 km to 30 km", "No Limit"];
+const STRENGTH_OPTIONS = ["Single Person", "Team"];
+const ORDER_ACCEPTED_OPTIONS = ["Small", "Medium", "Bulk", "No Limit"];
+const BOOKING_TIMELINE_OPTIONS = ["1 day prior", "2 days prior", "Sameday"];
+
 const PROFILE_FIELDS = [
   "aadhaarNumber",
   "languages",
@@ -23,6 +28,10 @@ const PROFILE_FIELDS = [
   "skills",
   "categoryId",
   "skillIds",
+  "workRadius",
+  "strength",
+  "orderAccepted",
+  "bookingTimeline",
   "workMedia",
 ];
 
@@ -42,6 +51,12 @@ const sanitizeProfileData = (body) => ({
         : null,
   },
   skills: Array.isArray(body.skills) ? body.skills : [],
+  workRadius: typeof body.workRadius === "string" ? body.workRadius.trim() : "",
+  strength: typeof body.strength === "string" ? body.strength.trim() : "",
+  orderAccepted: Array.isArray(body.orderAccepted)
+    ? [...new Set(body.orderAccepted.filter((o) => typeof o === "string" && o.trim()).map((o) => o.trim()))]
+    : [],
+  bookingTimeline: typeof body.bookingTimeline === "string" ? body.bookingTimeline.trim() : "",
   workMedia: Array.isArray(body.workMedia) ? body.workMedia : [],
 });
 
@@ -57,6 +72,9 @@ const validateProfile = (data) => {
     .map((l) => l.trim());
   if (languages.length < 1) {
     errors.languages = "Please select at least one language";
+  } else if (languages.some((l) => l.toLowerCase() === "other")) {
+    // "Other" is only a UI affordance — the real value is typed by the worker.
+    errors.languages = 'Please type your language instead of saving "Other"';
   }
 
   if (data.address.length < ADDRESS_MIN) {
@@ -78,12 +96,29 @@ const validateProfile = (data) => {
   }
 
   const workMedia = data.workMedia.filter((m) => m && typeof m.url === "string" && m.url.trim());
-  if (workMedia.length > WORK_MEDIA_MAX) {
+  if (workMedia.length < 1) {
+    errors.workMedia = "At least one work photo or video is required";
+  } else if (workMedia.length > WORK_MEDIA_MAX) {
     errors.workMedia = `You can upload at most ${WORK_MEDIA_MAX} work images or videos`;
   } else if (workMedia.some((m) => !/^https?:\/\//.test(m.url.trim()))) {
     errors.workMedia = "Work media URLs must be valid http(s) links";
   } else if (workMedia.some((m) => !["image", "video"].includes(m.resourceType))) {
     errors.workMedia = "Work media type must be image or video";
+  }
+
+  if (!WORK_RADIUS_OPTIONS.includes(data.workRadius)) {
+    errors.workRadius = "Please select your work radius (10 km to 30 km, or No Limit)";
+  }
+  if (!STRENGTH_OPTIONS.includes(data.strength)) {
+    errors.strength = "Please select Single Person or Team";
+  }
+  if (data.orderAccepted.length < 1) {
+    errors.orderAccepted = "Please select at least one order size";
+  } else if (data.orderAccepted.some((o) => !ORDER_ACCEPTED_OPTIONS.includes(o))) {
+    errors.orderAccepted = "Order size must be Small, Medium, Bulk, or No Limit";
+  }
+  if (!BOOKING_TIMELINE_OPTIONS.includes(data.bookingTimeline)) {
+    errors.bookingTimeline = "Please select your booking timeline";
   }
 
   return { errors, skills, languages, workMedia };
@@ -96,6 +131,10 @@ const buildPayload = (data, skills, languages, workMedia) => ({
   city: data.city,
   gpsCoordinates: data.gpsCoordinates,
   skills,
+  workRadius: data.workRadius,
+  strength: data.strength,
+  orderAccepted: data.orderAccepted,
+  bookingTimeline: data.bookingTimeline,
   workMedia: workMedia.map((m) => ({ url: m.url.trim(), resourceType: m.resourceType })),
 });
 
@@ -149,6 +188,10 @@ const shapeProfile = (profile) => {
     skills: profile.skills,
     categoryId: profile.categoryId || null,
     skillIds: profile.skillIds || [],
+    workRadius: profile.workRadius || "",
+    strength: profile.strength || "",
+    orderAccepted: profile.orderAccepted || [],
+    bookingTimeline: profile.bookingTimeline || "",
     workMedia: profile.workMedia,
     status: profile.status,
     profileCompleted: profile.profileCompleted,
@@ -320,8 +363,12 @@ exports.getPosterBoys = async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const search = (req.query.search || "").trim();
+    const accountStatus = (req.query.accountStatus || "").trim();
 
     const filter = { role: "POSTER_BOY" };
+    if (accountStatus === "pending" || accountStatus === "approved" || accountStatus === "rejected") {
+      filter.approvalStatus = accountStatus;
+    }
     if (search) {
       filter.$or = [
         { fullName: { $regex: search, $options: "i" } },
@@ -363,6 +410,10 @@ exports.getPosterBoys = async (req, res) => {
               languages: profile.languages,
               address: profile.address,
               aadhaarNumber: profile.aadhaarNumber,
+              workRadius: profile.workRadius || "",
+              strength: profile.strength || "",
+              orderAccepted: profile.orderAccepted || [],
+              bookingTimeline: profile.bookingTimeline || "",
               workMedia: profile.workMedia,
               profileCompleted: profile.profileCompleted,
               hasPendingChange: !!(profile.pendingChange && profile.pendingChange.data),

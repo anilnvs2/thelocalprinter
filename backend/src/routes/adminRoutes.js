@@ -15,6 +15,7 @@ const {
   deleteUser,
   deleteBusiness,
   toggleBusinessStatus,
+  updateBusinessTrustScore,
   adminUpdateUser,
   getUserById,
   getBusinessById,
@@ -72,6 +73,7 @@ router.get("/businesses/:id", getBusinessById);
 router.put("/businesses/:id", adminUpdateBusiness);
 router.patch("/businesses/:id/status", updateBusinessStatus);
 router.patch("/businesses/:id/toggle-status", toggleBusinessStatus);
+router.patch("/businesses/:id/trust-score", updateBusinessTrustScore);
 router.delete("/businesses/:id", deleteBusiness);
 
 router.get("/approvals", getPendingApprovals);

@@ -27,6 +27,7 @@ import {
   ClipboardList,
   AlertTriangle,
   Plus,
+  Trash2,
 } from "lucide-react";
 import { getAdminBusinessById, adminUpdateBusiness } from "../../services/adminService";
 import api from "../../services/api";
@@ -116,8 +117,9 @@ const normalizeOtherList = (list, options) => {
 const setOtherCustomValue = (list, options, text) => {
   const arr = Array.isArray(list) ? list : [];
   const presets = arr.filter((v) => options.includes(v));
-  const withOther = text.trim() && !presets.includes("Other") ? [...presets, "Other"] : presets;
-  return text.trim() ? [...withOther, text.trim()] : withOther;
+  // Stored as-is (no trimming) so spaces work while typing.
+  const withOther = presets.includes("Other") ? presets : [...presets, "Other"];
+  return text ? [...withOther, text] : presets;
 };
 
 const toggleOtherList = (list, options, nextSelected) => {
@@ -172,7 +174,7 @@ const emptyForm = {
   sampleDisplayAvailable: false,
   preferredFileFormats: [],
   acceptsPurchaseOrder: false,
-  fraudReport: { contactName: "", designation: "", contactNumber: "" },
+  fraudReport: [{ contactName: "", designation: "", contactNumber: "" }],
 };
 
 const FormField = ({ label, required, error, children, hint }) => (
@@ -373,7 +375,11 @@ const AdminBusinessEditPage = () => {
           addonServices: normalizeOtherList(b.addonServices, ADDON_SERVICE_OPTIONS), sampleDisplayAvailable: b.sampleDisplayAvailable || false,
           preferredFileFormats: normalizeOtherList(b.preferredFileFormats, FILE_FORMAT_OPTIONS),
           acceptsPurchaseOrder: b.acceptsPurchaseOrder || false,
-          fraudReport: b.fraudReport || emptyForm.fraudReport,
+          fraudReport: Array.isArray(b.fraudReport)
+            ? b.fraudReport
+            : b.fraudReport && b.fraudReport.contactName
+              ? [b.fraudReport]
+              : emptyForm.fraudReport,
         });
       } catch (err) {
         setSubmitError(err.response?.data?.message || "Failed to load business data");
@@ -1347,15 +1353,71 @@ const AdminBusinessEditPage = () => {
               <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
               <span>This information is strictly private and will never be shown to public users.</span>
             </div>
-            <FormField label="Contact Name">
-              <Input value={form.fraudReport.contactName} onChange={(e) => updateNested("fraudReport", "contactName", e.target.value)} placeholder="Name of the person to report" />
-            </FormField>
-            <FormField label="Designation">
-              <Input value={form.fraudReport.designation} onChange={(e) => updateNested("fraudReport", "designation", e.target.value)} placeholder="e.g. Manager, Owner" />
-            </FormField>
-            <FormField label="Contact Number">
-              <Input value={form.fraudReport.contactNumber} onChange={(e) => updateNested("fraudReport", "contactNumber", e.target.value)} placeholder="e.g. +91 98765 43210" />
-            </FormField>
+            <div className="space-y-4">
+              {(Array.isArray(form.fraudReport) ? form.fraudReport : [form.fraudReport]).map((entry, idx, arr) => (
+                <div key={idx} className="space-y-3 p-4 rounded-lg border border-border bg-card">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-foreground">Contact {idx + 1}</p>
+                    {arr.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => updateField("fraudReport", arr.filter((_, i) => i !== idx))}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive hover:text-destructive/80 transition-colors"
+                      >
+                        <Trash2 size={13} />
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <FormField label="Contact Name">
+                    <Input
+                      value={entry?.contactName || ""}
+                      onChange={(e) => {
+                        const updated = [...arr];
+                        updated[idx] = { ...updated[idx], contactName: e.target.value };
+                        updateField("fraudReport", updated);
+                      }}
+                      placeholder="Name of the person to report"
+                    />
+                  </FormField>
+                  <FormField label="Designation">
+                    <Input
+                      value={entry?.designation || ""}
+                      onChange={(e) => {
+                        const updated = [...arr];
+                        updated[idx] = { ...updated[idx], designation: e.target.value };
+                        updateField("fraudReport", updated);
+                      }}
+                      placeholder="e.g. Manager, Owner"
+                    />
+                  </FormField>
+                  <FormField label="Contact Number">
+                    <Input
+                      value={entry?.contactNumber || ""}
+                      onChange={(e) => {
+                        const updated = [...arr];
+                        updated[idx] = { ...updated[idx], contactNumber: e.target.value };
+                        updateField("fraudReport", updated);
+                      }}
+                      placeholder="e.g. +91 98765 43210"
+                    />
+                  </FormField>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                updateField("fraudReport", [
+                  ...(Array.isArray(form.fraudReport) ? form.fraudReport : []),
+                  { contactName: "", designation: "", contactNumber: "" },
+                ])
+              }
+              className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              <Plus size={16} />
+              Add Another
+            </button>
           </div>
         );
 

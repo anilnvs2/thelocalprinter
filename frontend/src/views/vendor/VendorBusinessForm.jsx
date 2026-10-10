@@ -134,8 +134,10 @@ const normalizeOtherList = (list, options) => {
 const setOtherCustomValue = (list, options, text) => {
   const arr = Array.isArray(list) ? list : [];
   const presets = arr.filter((v) => options.includes(v));
-  const withOther = text.trim() && !presets.includes("Other") ? [...presets, "Other"] : presets;
-  return text.trim() ? [...withOther, text.trim()] : withOther;
+  // The typed value is stored as-is (no trimming) so trailing spaces survive
+  // while the user is still typing.
+  const withOther = presets.includes("Other") ? presets : [...presets, "Other"];
+  return text ? [...withOther, text] : presets;
 };
 
 const toggleOtherList = (list, options, nextSelected) => {
@@ -706,6 +708,9 @@ const VendorBusinessForm = () => {
     if (stepIndex === 12) {
       if (f.replaceMistakesAtNoCharge !== "Yes" && f.replaceMistakesAtNoCharge !== "No") {
         errs.replaceMistakesAtNoCharge = "Please select Yes or No";
+      }
+      if (isBlank(f.returnReplacementPolicy)) {
+        errs.returnReplacementPolicy = "Return / replacement policy is required";
       }
       if (typeof f.inHouseDesignerAvailable !== "boolean") {
         errs.inHouseDesignerAvailable = "Please select Yes or No";
@@ -1706,9 +1711,20 @@ const VendorBusinessForm = () => {
                 onChange={(val) => updateField("replaceMistakesAtNoCharge", val)}
               />
             </FormField>
-            <FormField label="Return / Replacement Policy">
-              <Textarea value={form.returnReplacementPolicy} onChange={(e) => updateField("returnReplacementPolicy", e.target.value)} placeholder="Describe your return/replacement policy..." rows={3} />
-            </FormField>
+            <div>
+              <Textarea
+                value={form.returnReplacementPolicy}
+                onChange={(e) => updateField("returnReplacementPolicy", e.target.value)}
+                placeholder="Describe your return/replacement policy..."
+                rows={3}
+                aria-label="Return / Replacement Policy"
+                aria-required="true"
+                className={errors.returnReplacementPolicy ? "border-destructive focus-visible:ring-destructive" : ""}
+              />
+              {errors.returnReplacementPolicy && (
+                <p className="mt-1.5 text-xs text-destructive">{errors.returnReplacementPolicy}</p>
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField label="In-house Designer Available" required error={errors.inHouseDesignerAvailable}>
                 <div className="flex items-center gap-3">
@@ -1826,55 +1842,58 @@ const VendorBusinessForm = () => {
               <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
               <span>This information is strictly private and will never be shown to public users.</span>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Private to you and the admin — never shown to users or other vendors.
+            </p>
             {form.fraudReport.map((entry, idx) => (
-              <div key={idx} className="space-y-3 p-4 rounded-lg border border-border bg-card">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-foreground">Contact {idx + 1}</p>
-                  {form.fraudReport.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const updated = form.fraudReport.filter((_, i) => i !== idx);
+                  <div key={idx} className="space-y-3 p-4 rounded-lg border border-border bg-card">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-foreground">Contact {idx + 1}</p>
+                      {form.fraudReport.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = form.fraudReport.filter((_, i) => i !== idx);
+                            updateField("fraudReport", updated);
+                          }}
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive hover:text-destructive/80 transition-colors"
+                        >
+                          <Trash2 size={13} />
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <FormField label="Contact Name">
+                      <Input value={entry.contactName} onChange={(e) => {
+                        const updated = [...form.fraudReport];
+                        updated[idx] = { ...updated[idx], contactName: e.target.value };
                         updateField("fraudReport", updated);
-                      }}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive hover:text-destructive/80 transition-colors"
-                    >
-                      <Trash2 size={13} />
-                      Remove
-                    </button>
-                  )}
-                </div>
-                <FormField label="Contact Name">
-                  <Input value={entry.contactName} onChange={(e) => {
-                    const updated = [...form.fraudReport];
-                    updated[idx] = { ...updated[idx], contactName: e.target.value };
-                    updateField("fraudReport", updated);
-                  }} placeholder="Name of the person to report" />
-                </FormField>
-                <FormField label="Designation">
-                  <Input value={entry.designation} onChange={(e) => {
-                    const updated = [...form.fraudReport];
-                    updated[idx] = { ...updated[idx], designation: e.target.value };
-                    updateField("fraudReport", updated);
-                  }} placeholder="e.g. Manager, Owner" />
-                </FormField>
-                <FormField label="Contact Number">
-                  <Input value={entry.contactNumber} onChange={(e) => {
-                    const updated = [...form.fraudReport];
-                    updated[idx] = { ...updated[idx], contactNumber: e.target.value };
-                    updateField("fraudReport", updated);
-                  }} placeholder="e.g. +91 98765 43210" />
-                </FormField>
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={() => updateField("fraudReport", [...form.fraudReport, { contactName: "", designation: "", contactNumber: "" }])}
-              className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
-            >
-              <Plus size={16} />
-              Add Another
-            </button>
+                      }} placeholder="Name of the person to report" />
+                    </FormField>
+                    <FormField label="Designation">
+                      <Input value={entry.designation} onChange={(e) => {
+                        const updated = [...form.fraudReport];
+                        updated[idx] = { ...updated[idx], designation: e.target.value };
+                        updateField("fraudReport", updated);
+                      }} placeholder="e.g. Manager, Owner" />
+                    </FormField>
+                    <FormField label="Contact Number">
+                      <Input value={entry.contactNumber} onChange={(e) => {
+                        const updated = [...form.fraudReport];
+                        updated[idx] = { ...updated[idx], contactNumber: e.target.value };
+                        updateField("fraudReport", updated);
+                      }} placeholder="e.g. +91 98765 43210" />
+                    </FormField>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => updateField("fraudReport", [...form.fraudReport, { contactName: "", designation: "", contactNumber: "" }])}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+                >
+                  <Plus size={16} />
+                  Add Another
+                </button>
           </div>
         );
 

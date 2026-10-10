@@ -6,7 +6,7 @@ import {
   MessageCircle, Loader2, Languages, CreditCard,
   FileText, Star, Send, Trash2, Edit2, MessageSquare, Mail, Share2,
   Camera, Wrench, Shield, FileImage, ClipboardList,
-  Package, X, ChevronLeft, ChevronRight, Eye, ExternalLink, Sun, Moon, Video, BadgeCheck, Navigation,
+  Package, X, ChevronLeft, ChevronRight, Eye, ExternalLink, Sun, Moon, Video, BadgeCheck, Navigation, Award,
 } from "lucide-react";
 import {
   getBusinessDetails, getPublicBusinessDetails, addToWishlist, removeFromWishlist,
@@ -20,7 +20,6 @@ import { Textarea } from "../../components/ui/textarea";
 import { Label } from "../../components/ui/label";
 import CopyableId from "../../components/admin/CopyableId";
 import WatermarkLogo from "../../components/media/WatermarkLogo";
-import WatermarkDownloadButton from "../../components/media/WatermarkDownloadButton";
 import ProtectedVideo from "../../components/media/ProtectedVideo";
 import { useAuth } from "../../context/AuthContext";
 
@@ -93,13 +92,6 @@ const ArrayField = ({ label, value }) => {
   );
 };
 
-const mediaFileName = (label) =>
-  `${String(label || "image")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "") || "image"}-the-local-printer.jpg`;
-
 const VideoPlayer = ({ url, label }) => {
   if (!url) {
     return (
@@ -138,13 +130,6 @@ const ImageViewer = ({ url, label }) => {
       >
         <img src={url} alt={label} className="w-full h-40 object-cover transition-transform group-hover:scale-105" />
         <WatermarkLogo position="top-right" size="sm" />
-        <WatermarkDownloadButton
-          url={url}
-          filename={mediaFileName(label)}
-          position="top-right"
-          ariaLabel={`Download ${label} with website logo`}
-          className="absolute bottom-2 left-2 z-30"
-        />
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
           <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
@@ -159,14 +144,6 @@ const ImageViewer = ({ url, label }) => {
               <img src={url} alt={label} className="max-w-full max-h-[78vh] object-contain rounded-lg" />
               <WatermarkLogo position="bottom-right-lg" size="lg" />
             </div>
-            <WatermarkDownloadButton
-              url={url}
-              filename={mediaFileName(label)}
-              position="bottom-right-lg"
-              showLabel
-              ariaLabel={`Download ${label} with website logo`}
-              className="bg-white text-brand-navy"
-            />
           </div>
         </div>
       )}
@@ -193,13 +170,6 @@ const SlideshowViewer = ({ urls, label }) => {
       <div className="relative rounded-lg overflow-hidden border group cursor-pointer" onClick={() => setOpen(true)}>
         <img src={urls[current]} alt={`${label} ${current + 1}`} className="w-full h-40 object-cover" />
         <WatermarkLogo position="top-right" size="sm" />
-        <WatermarkDownloadButton
-          url={urls[current]}
-          filename={mediaFileName(`${label} ${current + 1}`)}
-          position="top-right"
-          ariaLabel={`Download ${label} image ${current + 1} with website logo`}
-          className="absolute bottom-2 left-2 z-30"
-        />
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
           <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
@@ -242,14 +212,6 @@ const SlideshowViewer = ({ urls, label }) => {
               <img src={urls[current]} alt={label} className="max-w-full max-h-[78vh] object-contain rounded-lg" />
               <WatermarkLogo position="bottom-right-lg" size="lg" />
             </div>
-            <WatermarkDownloadButton
-              url={urls[current]}
-              filename={mediaFileName(`${label} ${current + 1}`)}
-              position="bottom-right-lg"
-              showLabel
-              ariaLabel={`Download ${label} image ${current + 1} with website logo`}
-              className="bg-white text-brand-navy"
-            />
           </div>
           {urls.length > 1 && (
             <>
@@ -463,6 +425,14 @@ const UserBusinessDetails = ({ publicMode = false }) => {
   const hasCoords =
     typeof lat === "number" && typeof lng === "number" &&
     Number.isFinite(lat) && Number.isFinite(lng);
+  // Optional, admin-managed Brand Recall / Trust Score (0-10). No score = no badge.
+  const trustScore =
+    business.brandRecallScore === null ||
+    business.brandRecallScore === undefined ||
+    business.brandRecallScore === ""
+      ? NaN
+      : Number(business.brandRecallScore);
+  const hasTrustScore = Number.isFinite(trustScore);
   const mapDelta = 0.02;
   const mapSrc = hasCoords
     ? `https://www.openstreetmap.org/export/embed.html?bbox=${lng - mapDelta}%2C${lat - mapDelta}%2C${lng + mapDelta}%2C${lat + mapDelta}&layer=mapnik&marker=${lat}%2C${lng}`
@@ -538,20 +508,24 @@ const UserBusinessDetails = ({ publicMode = false }) => {
             <Building2 size={48} />
           )}
           {heroImage && <WatermarkLogo position="top-right" size="sm" />}
-          {heroImage && (
-            <WatermarkDownloadButton
-              url={heroImage}
-              filename={mediaFileName(`${business.name || "Business"} cover photo`)}
-              position="top-right"
-              ariaLabel="Download cover photo with website logo"
-              className="absolute bottom-3 left-3 z-30"
-            />
-          )}
-          {hasCoords && (
-            <span className="absolute top-3 left-3 z-10 inline-flex items-center gap-1 bg-emerald-600/95 text-white text-[11px] font-extrabold uppercase tracking-wide px-2.5 py-1.5 rounded-full backdrop-blur-sm shadow-sm">
-              <BadgeCheck size={13} className="shrink-0" />
-              GPS Verified
-            </span>
+          {(hasCoords || hasTrustScore) && (
+            <div className="absolute top-3 left-3 z-10 flex flex-col items-start gap-1.5">
+              {hasCoords && (
+                <span className="inline-flex items-center gap-1 bg-emerald-600/95 text-white text-[11px] font-extrabold uppercase tracking-wide px-2.5 py-1.5 rounded-full backdrop-blur-sm shadow-sm">
+                  <BadgeCheck size={13} className="shrink-0" />
+                  GPS Verified
+                </span>
+              )}
+              {hasTrustScore && (
+                <span
+                  title="Trust Score assigned by the admin"
+                  className="inline-flex items-center gap-1 bg-amber-500/95 text-white text-[11px] font-extrabold uppercase tracking-wide px-2.5 py-1.5 rounded-full backdrop-blur-sm shadow-sm whitespace-nowrap"
+                >
+                  <Award size={13} className="shrink-0" />
+                  Trust Score {trustScore}/10
+                </span>
+              )}
+            </div>
           )}
         </div>
         <div className="pt-5">

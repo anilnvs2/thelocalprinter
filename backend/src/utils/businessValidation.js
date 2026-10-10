@@ -238,6 +238,10 @@ async function validateBusinessPayload(data, { mode = "create", existing = null 
     }
   }
 
+  if (present("returnReplacementPolicy") && !hasText(data.returnReplacementPolicy)) {
+    errors.push("Return / replacement policy is required");
+  }
+
   if (present("inHouseDesignerAvailable") && !isBoolean(data.inHouseDesignerAvailable)) {
     errors.push("In-house designer availability is required (Yes / No)");
   }

@@ -421,6 +421,57 @@ exports.toggleBusinessStatus = async (req, res) => {
   }
 };
 
+// ─── Brand Recall / Trust Score (ADMIN-managed, optional, per business) ───
+// PATCH /api/admin/businesses/:id/trust-score
+// body: { brandRecallScore: 8.5 | null }   (null / "" removes the score)
+// Authorisation is enforced by the router-level authenticateUser + authorizeRole("ADMIN").
+// Only this single field is written, so no other business property can be reset.
+exports.updateBusinessTrustScore = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const raw = req.body ? req.body.brandRecallScore : undefined;
+
+    let score;
+    if (raw === null || raw === undefined || (typeof raw === "string" && raw.trim() === "")) {
+      score = null; // blank means "no score assigned"
+    } else {
+      score = typeof raw === "number" ? raw : Number(String(raw).trim());
+      if (!Number.isFinite(score)) {
+        return res.status(400).json({
+          success: false,
+          message: "Trust score must be a number between 0 and 10",
+        });
+      }
+      if (score < 0 || score > 10) {
+        return res.status(400).json({
+          success: false,
+          message: "Trust score must be between 0 and 10",
+        });
+      }
+    }
+
+    const business = await Business.findById(id).select("_id name brandRecallScore");
+    if (!business) {
+      return res.status(404).json({ success: false, message: "Business not found" });
+    }
+
+    // $set on a single key: unrelated business fields are never touched.
+    await Business.updateOne({ _id: business._id }, { $set: { brandRecallScore: score } });
+    business.brandRecallScore = score;
+
+    res.status(200).json({
+      success: true,
+      message: score === null
+        ? "Trust score removed"
+        : `Trust score ${score}/10 saved`,
+      data: { businessId: business._id, name: business.name, brandRecallScore: score },
+    });
+  } catch (error) {
+    console.error("updateBusinessTrustScore error:", error);
+    res.status(500).json({ success: false, message: "Server error saving trust score" });
+  }
+};
+
 // ─── Get Business by ID (Admin - full details) ───
 
 exports.getBusinessById = async (req, res) => {
@@ -547,7 +598,16 @@ exports.adminUpdateBusiness = async (req, res) => {
     if (data.preferredFileFormats !== undefined) business.preferredFileFormats = data.preferredFileFormats;
 
     if (data.acceptsPurchaseOrder !== undefined) business.acceptsPurchaseOrder = data.acceptsPurchaseOrder;
-    if (data.fraudReport !== undefined) business.fraudReport = data.fraudReport;
+    if (data.fraudReport !== undefined) {
+      // Blank rows are dropped so admin edits do not create empty hotlist entries.
+      business.fraudReport = (Array.isArray(data.fraudReport) ? data.fraudReport : [])
+        .map((entry) => ({
+          contactName: String(entry?.contactName || "").trim(),
+          designation: String(entry?.designation || "").trim(),
+          contactNumber: String(entry?.contactNumber || "").trim(),
+        }))
+        .filter((entry) => entry.contactName || entry.designation || entry.contactNumber);
+    }
 
     if (data.status !== undefined) business.status = data.status;
     if (data.isActive !== undefined) business.isActive = data.isActive;

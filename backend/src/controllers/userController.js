@@ -134,7 +134,7 @@ exports.getPublicBusinesses = async (req, res) => {
         .populate("serviceIds", "name slug")
         .populate("vendor", "publicId")
         .select(
-          "name description category categoryId serviceIds city address serviceType customerType orderingMethod orderLimits tags workingHours languages verificationMedia.thumbnailImages verificationMedia.outdoorStoreImage verificationMedia.indoorStoreImage contactName vendor gpsCoordinates"
+          "name description category categoryId serviceIds city address serviceType customerType orderingMethod orderLimits tags workingHours languages verificationMedia.thumbnailImages verificationMedia.outdoorStoreImage verificationMedia.indoorStoreImage contactName vendor gpsCoordinates brandRecallScore"
         );
     } else {
       const [businesses, total] = await Promise.all([
@@ -146,7 +146,7 @@ exports.getPublicBusinesses = async (req, res) => {
           .populate("serviceIds", "name slug")
           .populate("vendor", "publicId")
           .select(
-            "name description category categoryId serviceIds city address serviceType customerType orderingMethod orderLimits tags workingHours languages verificationMedia.thumbnailImages verificationMedia.outdoorStoreImage verificationMedia.indoorStoreImage contactName vendor gpsCoordinates"
+            "name description category categoryId serviceIds city address serviceType customerType orderingMethod orderLimits tags workingHours languages verificationMedia.thumbnailImages verificationMedia.outdoorStoreImage verificationMedia.indoorStoreImage contactName vendor gpsCoordinates brandRecallScore"
           ),
         Business.countDocuments(query),
       ]);
@@ -788,6 +788,10 @@ const toPublicPosterBoy = (profile, user, distance) => {
     skills: profile.skills || [],
     skillIds: profile.skillIds || [],
     categoryId: profile.categoryId || null,
+    workRadius: profile.workRadius || "",
+    strength: profile.strength || "",
+    orderAccepted: profile.orderAccepted || [],
+    bookingTimeline: profile.bookingTimeline || "",
     workMedia,
     coverImage: cover ? cover.url : "",
     gpsCoordinates: profile.gpsCoordinates || { lat: null, lng: null },
@@ -824,10 +828,17 @@ exports.getPublicPosterBoys = async (req, res) => {
     }
     if (search) {
       const safe = escapeRegex(search);
+      // Free text matches skills / city / address, plus the worker's name
+      // (the name lives on the User document, not the profile).
+      const nameUsers = await User.find({
+        role: "POSTER_BOY",
+        fullName: { $regex: safe, $options: "i" },
+      }).select("_id");
       query.$or = [
         { skills: { $regex: safe, $options: "i" } },
         { city: { $regex: safe, $options: "i" } },
         { address: { $regex: safe, $options: "i" } },
+        ...(nameUsers.length ? [{ user: { $in: nameUsers.map((u) => u._id) } }] : []),
       ];
     }
 
@@ -883,6 +894,29 @@ exports.getPublicPosterBoys = async (req, res) => {
     });
   } catch (error) {
     console.error("Get public poster boys error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// GET /api/user/public/poster-boys/:id
+exports.getPublicPosterBoyById = async (req, res) => {
+  try {
+    const profile = await PosterBoyProfile.findById(req.params.id);
+    if (!profile || profile.status !== "approved" || !profile.profileCompleted) {
+      return res.status(404).json({ success: false, message: "Poster boy not found" });
+    }
+    const user = await User.findById(profile.user).select(
+      "fullName publicId phone whatsappNumber role isActive approvalStatus"
+    );
+    if (!isListablePosterBoy(user)) {
+      return res.status(404).json({ success: false, message: "Poster boy not found" });
+    }
+    return res.status(200).json({
+      success: true,
+      data: { posterBoy: toPublicPosterBoy(profile, user) },
+    });
+  } catch (error) {
+    console.error("Get public poster boy error:", error);
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };

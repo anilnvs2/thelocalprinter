@@ -1,5 +1,6 @@
 import { Inter } from 'next/font/google';
 import Providers from '@/lib/providers';
+import NoMediaContextMenu from '@/components/media/NoMediaContextMenu';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -30,6 +31,7 @@ export default function RootLayout({ children }) {
       </head>
       <body className={`${inter.variable} font-sans antialiased min-h-screen selection:bg-accent-green selection:text-white`}>
         <Providers>
+          <NoMediaContextMenu />
           {children}
         </Providers>
       </body>

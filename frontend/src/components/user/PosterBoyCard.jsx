@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   MapPin,
   Loader2,
@@ -13,13 +14,13 @@ import {
   Video,
   ChevronLeft,
   ChevronRight,
+  Eye,
 } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import CopyableId from "../admin/CopyableId";
 import WatermarkLogo from "../media/WatermarkLogo";
-import WatermarkDownloadButton from "../media/WatermarkDownloadButton";
 import ProtectedVideo from "../media/ProtectedVideo";
 import { revealPosterBoyContact } from "@/services/userService";
 
@@ -27,13 +28,18 @@ import { revealPosterBoyContact } from "@/services/userService";
  * Public poster boy card. Shows only allowlisted public fields — never the
  * Aadhaar number, email or raw phone number (contact is revealed on demand).
  */
-const PosterBoyCard = ({ posterBoy: p }) => {
+const PosterBoyCard = ({ posterBoy: p, detailHref }) => {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [contact, setContact] = useState(null);
   const [imgIndex, setImgIndex] = useState(0);
 
   if (!p) return null;
+
+  const goToProfile = () => {
+    if (detailHref) router.push(detailHref);
+  };
 
   const skills = Array.isArray(p.skills) ? p.skills : [];
   const languages = Array.isArray(p.languages) ? p.languages : [];
@@ -83,7 +89,10 @@ const PosterBoyCard = ({ posterBoy: p }) => {
   };
 
   return (
-    <Card className="overflow-hidden flex flex-col">
+    <Card
+      className={`overflow-hidden flex flex-col ${detailHref ? "cursor-pointer transition-shadow hover:shadow-lg" : ""}`}
+      onClick={goToProfile}
+    >
       <div className="h-40 bg-gradient-to-br from-orange-50 to-amber-100 dark:from-orange-950/30 dark:to-amber-950/30 flex items-center justify-center text-brand-orange relative overflow-hidden shrink-0">
         {currentImage ? (
           <img
@@ -96,20 +105,11 @@ const PosterBoyCard = ({ posterBoy: p }) => {
           <Megaphone size={36} />
         )}
         {currentImage && <WatermarkLogo position="bottom-right" size="sm" />}
-        {currentImage && (
-          <WatermarkDownloadButton
-            url={currentImage}
-            position="bottom-right"
-            filename={`poster-boy-${p.publicId || "work"}-work-photo.jpg`}
-            ariaLabel="Download work photo with website logo"
-            className="absolute bottom-2 left-2 z-30"
-          />
-        )}
         {hasMultipleImages && (
           <>
             <button
               type="button"
-              onClick={() => stepImage(-1)}
+              onClick={(e) => { e.stopPropagation(); stepImage(-1); }}
               aria-label="Previous image"
               className="absolute left-2 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white shadow-sm transition-colors hover:bg-black/80"
             >
@@ -117,7 +117,7 @@ const PosterBoyCard = ({ posterBoy: p }) => {
             </button>
             <button
               type="button"
-              onClick={() => stepImage(1)}
+              onClick={(e) => { e.stopPropagation(); stepImage(1); }}
               aria-label="Next image"
               className="absolute right-2 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white shadow-sm transition-colors hover:bg-black/80"
             >
@@ -170,7 +170,7 @@ const PosterBoyCard = ({ posterBoy: p }) => {
         </h3>
 
         {p.publicId && (
-          <div className="flex items-center gap-1.5 min-w-0 text-xs">
+          <div className="flex items-center gap-1.5 min-w-0 text-xs" onClick={(e) => e.stopPropagation()}>
             <span className="text-muted-foreground shrink-0">Poster ID:</span>
             <CopyableId id={p.publicId} />
           </div>
@@ -209,6 +209,7 @@ const PosterBoyCard = ({ posterBoy: p }) => {
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Get directions"
+                onClick={(e) => e.stopPropagation()}
                 className="truncate hover:text-primary hover:underline underline-offset-2"
               >
                 {p.city}
@@ -228,7 +229,18 @@ const PosterBoyCard = ({ posterBoy: p }) => {
           </p>
         )}
 
-        <div className="pt-1 mt-auto">
+        <div className="pt-1 mt-auto" onClick={(e) => e.stopPropagation()}>
+          {detailHref && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full gap-1 text-xs font-semibold text-primary hover:text-primary/80 mb-2"
+              onClick={goToProfile}
+            >
+              <Eye size={14} />
+              View Profile
+            </Button>
+          )}
           {contact ? (
             <div className="flex flex-col gap-2">
               <a

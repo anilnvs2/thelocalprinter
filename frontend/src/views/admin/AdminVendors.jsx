@@ -18,6 +18,7 @@ import {
   Calendar,
   CheckCircle,
   XCircle,
+  Award,
 } from "lucide-react";
 import {
   getVendors,
@@ -28,6 +29,7 @@ import {
   deleteBusiness,
 } from "../../services/adminService";
 import BusinessViewDialog from "./BusinessViewDialog";
+import TrustScoreDialog from "../../components/admin/TrustScoreDialog";
 import { PageHeader } from "../../components/shared/page-header";
 import { StatusBadge } from "../../components/shared/status-badge";
 import { EmptyState } from "../../components/shared/empty-state";
@@ -85,6 +87,9 @@ const AdminVendors = () => {
   const [bizDeleteTarget, setBizDeleteTarget] = useState(null);
   const [bizDeleteLoading, setBizDeleteLoading] = useState(false);
   const [bizDeleteError, setBizDeleteError] = useState("");
+  // Trust Score: null = closed, otherwise the vendor's businesses to pick from.
+  const [trustScoreList, setTrustScoreList] = useState(null);
+  const [trustScoreLoading, setTrustScoreLoading] = useState(false);
   const debounceRef = useRef(null);
 
   const fetchVendors = async (p = 1, s = "") => {
@@ -150,6 +155,36 @@ const AdminVendors = () => {
     } finally {
       setBusinessesLoading(false);
     }
+  };
+
+  // The Trust Score belongs to an individual business, so from a vendor row we
+  // load that vendor's businesses and let the admin pick one (auto when there
+  // is only one) before editing its score.
+  const handleOpenTrustScore = async (v) => {
+    try {
+      setTrustScoreLoading(true);
+      setError("");
+      const res = await getBusinesses(1, "", "", v._id, 100);
+      const list = (res.data.businesses || []).map((b) => ({
+        _id: b._id,
+        name: b.name,
+        brandRecallScore: b.brandRecallScore ?? null,
+      }));
+      setTrustScoreList(list);
+    } catch (err) {
+      setTrustScoreList(null);
+      setError(err.response?.data?.message || "Failed to load this vendor's businesses");
+    } finally {
+      setTrustScoreLoading(false);
+    }
+  };
+
+  const handleTrustScoreSaved = ({ businessId, brandRecallScore }) => {
+    setTrustScoreList((prev) =>
+      Array.isArray(prev)
+        ? prev.map((b) => (b._id === businessId ? { ...b, brandRecallScore } : b))
+        : prev
+    );
   };
 
   const handleDeleteBusinessConfirm = async () => {
@@ -371,6 +406,17 @@ const AdminVendors = () => {
                             <DropdownMenuItem onClick={() => setViewTarget(v)}>
                               <Eye className="mr-2 h-4 w-4" />
                               View
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleOpenTrustScore(v)}
+                              disabled={trustScoreLoading}
+                            >
+                              {trustScoreLoading ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Award className="mr-2 h-4 w-4" />
+                              )}
+                              Set Trust Score
                             </DropdownMenuItem>
                             {v.approvalStatus !== "approved" && (
                               <>
@@ -643,6 +689,17 @@ const AdminVendors = () => {
           if (!open) setBizViewTarget(null);
         }}
         businessId={bizViewTarget?._id}
+        showFraud
+      />
+
+      {/* Optional Brand Recall / Trust Score: pick one of the vendor's businesses */}
+      <TrustScoreDialog
+        open={Array.isArray(trustScoreList)}
+        onOpenChange={(open) => {
+          if (!open) setTrustScoreList(null);
+        }}
+        businesses={trustScoreList || []}
+        onSaved={handleTrustScoreSaved}
       />
 
       <Dialog

@@ -121,7 +121,7 @@ export default function SubCategoryPage({ params }) {
         ) : (isStaffing ? posterBoys.length > 0 : businesses.length > 0) ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {isStaffing
-              ? posterBoys.map((pb) => <PosterBoyCard key={pb._id} posterBoy={pb} />)
+              ? posterBoys.map((pb) => <PosterBoyCard key={pb._id} posterBoy={pb} detailHref={`/poster-boys/${pb._id}`} />)
               : businesses.map((biz) => <UserBusinessCard key={biz._id} business={biz} detailHref={`/businesses/${biz._id}`} />)}
           </div>
         ) : (

@@ -75,7 +75,7 @@ const AdminPosterBoys = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await getPosterBoys(p, s);
+      const res = await getPosterBoys(p, s, "approved");
       setItems(res.data.items);
       setPagination(res.data.pagination);
     } catch (err) {
@@ -244,7 +244,7 @@ const AdminPosterBoys = () => {
     <div className="space-y-6">
       <PageHeader
         title="Poster Boys"
-        description="Manage poster boy registrations and their work profile approvals."
+        description="Approved worker boy accounts and their work profile approvals. First-time sign-ups are reviewed under Businesses."
       />
 
       {error && (
@@ -578,6 +578,26 @@ const AdminPosterBoys = () => {
                       <p className="text-sm font-medium">—</p>
                     )}
                   </div>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Work Radius</Label>
+                  <p className="text-sm font-medium">{viewTarget.profile.workRadius || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Strength</Label>
+                  <p className="text-sm font-medium">{viewTarget.profile.strength || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Order Accepted</Label>
+                  <p className="text-sm font-medium">
+                    {viewTarget.profile.orderAccepted?.length
+                      ? viewTarget.profile.orderAccepted.join(", ")
+                      : "—"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Booking Timeline</Label>
+                  <p className="text-sm font-medium">{viewTarget.profile.bookingTimeline || "—"}</p>
                 </div>
               </div>
 

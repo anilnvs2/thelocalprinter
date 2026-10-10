@@ -33,6 +33,11 @@ const SKILL_OPTIONS = [
 
 const MAX_WORK_MEDIA = 10;
 
+const WORK_RADIUS_OPTIONS = ["10 km to 30 km", "No Limit"];
+const STRENGTH_OPTIONS = ["Single Person", "Team"];
+const ORDER_ACCEPTED_OPTIONS = ["Small", "Medium", "Bulk", "No Limit"];
+const BOOKING_TIMELINE_OPTIONS = ["1 day prior", "2 days prior", "Sameday"];
+
 const emptyForm = {
   aadhaarNumber: "",
   languages: [],
@@ -40,6 +45,10 @@ const emptyForm = {
   city: "",
   gpsCoordinates: { lat: null, lng: null },
   skills: [],
+  workRadius: "",
+  strength: "",
+  orderAccepted: [],
+  bookingTimeline: "",
   workMedia: [],
 };
 
@@ -78,6 +87,36 @@ const CheckboxGrid = ({ options, selected, onChange, columns = 2 }) => {
             type="checkbox"
             checked={selected.includes(opt)}
             onChange={() => toggle(opt)}
+            className="accent-primary w-3.5 h-3.5"
+          />
+          <span>{opt}</span>
+        </label>
+      ))}
+    </div>
+  );
+};
+
+const RadioGrid = ({ name, options, value, onChange, columns = 2 }) => {
+  const gridClass = columns === 3
+    ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2"
+    : "grid grid-cols-1 sm:grid-cols-2 gap-2";
+
+  return (
+    <div className={gridClass}>
+      {options.map((opt) => (
+        <label
+          key={opt}
+          className={`flex items-center gap-2 p-2.5 rounded-lg border text-sm cursor-pointer transition-all ${
+            value === opt
+              ? "border-primary bg-primary/5 text-foreground"
+              : "border-border text-muted-foreground hover:bg-muted/50"
+          }`}
+        >
+          <input
+            type="radio"
+            name={name}
+            checked={value === opt}
+            onChange={() => onChange(opt)}
             className="accent-primary w-3.5 h-3.5"
           />
           <span>{opt}</span>
@@ -154,6 +193,7 @@ const PosterBoyDashboard = () => {
 
   const [form, setForm] = useState(emptyForm);
   const [othersChecked, setOthersChecked] = useState(false);
+  const [otherLanguage, setOtherLanguage] = useState("");
 
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState("");
@@ -183,17 +223,28 @@ const PosterBoyDashboard = () => {
       const source = (p && p.pendingChangeData) || p || {};
       const skills = Array.isArray(source.skills) ? source.skills : [];
       const custom = skills.filter((s) => !SKILL_OPTIONS.includes(s));
+      const loadedLangs = Array.isArray(source.languages) ? source.languages : [];
+      const customLang = loadedLangs.find((l) => l && !LANGUAGE_OPTIONS.includes(l)) || "";
+      const selectedLangs = [
+        ...loadedLangs.filter((l) => LANGUAGE_OPTIONS.includes(l)),
+        ...(customLang ? ["Other"] : []),
+      ];
 
       setForm({
         aadhaarNumber: source.aadhaarNumber || "",
-        languages: Array.isArray(source.languages) ? source.languages : [],
+        languages: selectedLangs,
         address: source.address || "",
         city: source.city || "",
         gpsCoordinates: source.gpsCoordinates || { lat: null, lng: null },
         skills,
+        workRadius: source.workRadius || "",
+        strength: source.strength || "",
+        orderAccepted: Array.isArray(source.orderAccepted) ? source.orderAccepted : [],
+        bookingTimeline: source.bookingTimeline || "",
         workMedia: Array.isArray(source.workMedia) ? source.workMedia : [],
       });
       setOthersChecked(custom.length > 0);
+      setOtherLanguage(customLang);
     } catch (err) {
       setLoadError(err.response?.data?.message || "Could not load your profile.");
     } finally {
@@ -207,12 +258,30 @@ const PosterBoyDashboard = () => {
     const e = {};
     if (!/^\d{12}$/.test(form.aadhaarNumber)) e.aadhaarNumber = "Aadhaar number must be exactly 12 digits";
     if (form.languages.length < 1) e.languages = "Please select at least one language";
+    else if (form.languages.includes("Other") && !otherLanguage.trim()) {
+      e.otherLanguage = "Please specify your other language";
+    }
     if (form.address.trim().length < 5) e.address = "Address must be at least 5 characters";
     else if (form.address.trim().length > 300) e.address = "Address must be at most 300 characters";
     if (form.skills.length < 1) {
       e.skills = othersChecked
         ? "Add at least one custom skill, or pick a skill from the list"
         : "Please select at least one skill";
+    }
+    if (!WORK_RADIUS_OPTIONS.includes(form.workRadius)) {
+      e.workRadius = "Please select your work radius (10 km to 30 km, or No Limit)";
+    }
+    if (!STRENGTH_OPTIONS.includes(form.strength)) {
+      e.strength = "Please select Single Person or Team";
+    }
+    if (form.orderAccepted.length < 1) {
+      e.orderAccepted = "Please select at least one order size";
+    }
+    if (!BOOKING_TIMELINE_OPTIONS.includes(form.bookingTimeline)) {
+      e.bookingTimeline = "Please select your booking timeline";
+    }
+    if (form.workMedia.length < 1) {
+      e.workMedia = "At least one work photo or video is required";
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -227,11 +296,15 @@ const PosterBoyDashboard = () => {
     try {
       const payload = {
         aadhaarNumber: form.aadhaarNumber.trim(),
-        languages: form.languages,
+        languages: form.languages.map((l) => (l === "Other" ? otherLanguage.trim() : l)),
         address: form.address.trim(),
         city: form.city,
         gpsCoordinates: form.gpsCoordinates,
         skills: form.skills,
+        workRadius: form.workRadius,
+        strength: form.strength,
+        orderAccepted: form.orderAccepted,
+        bookingTimeline: form.bookingTimeline,
         workMedia: form.workMedia,
       };
       const res = await updatePosterBoyProfile(payload);
@@ -540,6 +613,25 @@ const PosterBoyDashboard = () => {
                   onChange={(val) => updateField("languages", val)}
                   columns={3}
                 />
+                {form.languages.includes("Other") && (
+                  <div className="space-y-1.5 pt-1">
+                    <Label htmlFor="otherLanguage" className="text-sm font-medium text-foreground">
+                      Other — what language do you speak? <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="otherLanguage"
+                      value={otherLanguage}
+                      onChange={(e) => {
+                        setOtherLanguage(e.target.value);
+                        setErrors((prev) => ({ ...prev, otherLanguage: "" }));
+                      }}
+                      placeholder="Type your language"
+                    />
+                    {errors.otherLanguage && (
+                      <p className="text-xs text-destructive font-medium">{errors.otherLanguage}</p>
+                    )}
+                  </div>
+                )}
               </FormField>
             </Section>
 
@@ -610,14 +702,64 @@ const PosterBoyDashboard = () => {
               </FormField>
             </Section>
 
-            {/* ── 6. Work media ── */}
+            {/* ── 6. Work preferences ── */}
+            <Section
+              icon={MapPin}
+              title="Work Preferences"
+              subtitle="How far you travel, team size, order sizes you handle, and the notice you need."
+            >
+              <div className="space-y-5">
+                <FormField label="Work Preference area radius from your address" required error={errors.workRadius}>
+                  <RadioGrid
+                    name="workRadius"
+                    options={WORK_RADIUS_OPTIONS}
+                    value={form.workRadius}
+                    onChange={(val) => updateField("workRadius", val)}
+                  />
+                </FormField>
+
+                <FormField label="Strength" required error={errors.strength}>
+                  <RadioGrid
+                    name="strength"
+                    options={STRENGTH_OPTIONS}
+                    value={form.strength}
+                    onChange={(val) => updateField("strength", val)}
+                  />
+                </FormField>
+
+                <FormField
+                  label="Order Accepted"
+                  required
+                  error={errors.orderAccepted}
+                  hint="Select all the order sizes you can handle"
+                >
+                  <CheckboxGrid
+                    options={ORDER_ACCEPTED_OPTIONS}
+                    selected={form.orderAccepted}
+                    onChange={(val) => updateField("orderAccepted", val)}
+                  />
+                </FormField>
+
+                <FormField label="Booking Timeline" required error={errors.bookingTimeline} hint="How much notice do you need before the work starts?">
+                  <RadioGrid
+                    name="bookingTimeline"
+                    options={BOOKING_TIMELINE_OPTIONS}
+                    value={form.bookingTimeline}
+                    onChange={(val) => updateField("bookingTimeline", val)}
+                  />
+                </FormField>
+              </div>
+            </Section>
+
+            {/* ── 7. Work media ── */}
             <Section
               icon={Camera}
               title="Work Pics & Videos"
-              subtitle={`Photos or videos of your past work. Optional — up to ${MAX_WORK_MEDIA} files.`}
+              subtitle={`Photos or videos of your past work. Mandatory — up to ${MAX_WORK_MEDIA} files.`}
             >
               <FormField
-                label="Work media"
+                label="Work Pics & Videos"
+                required
                 error={uploadError || errors.workMedia}
                 hint="JPG, PNG, WebP (max 10MB) · MP4, MOV, WebM (max 100MB)"
               >

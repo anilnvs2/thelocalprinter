@@ -104,6 +104,11 @@ export const getPublicPosterBoys = async (params = {}) => {
   return response.data;
 };
 
+export const getPublicPosterBoy = async (id) => {
+  const response = await api.get(`/user/public/poster-boys/${id}`);
+  return response.data;
+};
+
 export const revealPosterBoyContact = async (id) => {
   const response = await api.post(`/user/public/poster-boys/${id}/contact`);
   return response.data;

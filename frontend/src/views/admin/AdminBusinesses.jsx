@@ -14,6 +14,7 @@ import {
   XCircle,
   UserX,
   UserCheck,
+  Award,
 } from "lucide-react";
 import {
   getBusinesses,
@@ -22,8 +23,11 @@ import {
   updateBusinessStatus,
   getResellerApplications,
   approveResellerApplication,
+  getPosterBoys,
+  updateUserApprovalStatus,
 } from "../../services/adminService";
 import BusinessViewDialog from "./BusinessViewDialog";
+import TrustScoreDialog from "../../components/admin/TrustScoreDialog";
 import { PageHeader } from "../../components/shared/page-header";
 import { StatusBadge } from "../../components/shared/status-badge";
 import { EmptyState } from "../../components/shared/empty-state";
@@ -78,11 +82,15 @@ const AdminBusinesses = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [viewTarget, setViewTarget] = useState(null);
+  const [trustScoreTarget, setTrustScoreTarget] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [pendingResellers, setPendingResellers] = useState([]);
   const [resellerConfirm, setResellerConfirm] = useState(null);
   const [resellerLoading, setResellerLoading] = useState(false);
+  const [pendingWorkers, setPendingWorkers] = useState([]);
+  const [workerConfirm, setWorkerConfirm] = useState(null);
+  const [workerLoading, setWorkerLoading] = useState(false);
   const debounceRef = useRef(null);
 
   const fetchPendingResellers = async () => {
@@ -91,6 +99,16 @@ const AdminBusinesses = () => {
       setPendingResellers(res.data.applications || []);
     } catch {
       setPendingResellers([]);
+    }
+  };
+
+  // First-time worker boy sign-ups wait here until the admin approves them.
+  const fetchPendingWorkers = async () => {
+    try {
+      const res = await getPosterBoys(1, "", "pending");
+      setPendingWorkers(res.data.items || []);
+    } catch {
+      setPendingWorkers([]);
     }
   };
 
@@ -112,9 +130,38 @@ const AdminBusinesses = () => {
     fetchBusinesses(page, search, statusFilter === "all" ? "" : statusFilter);
   }, [page, statusFilter]);
 
+  // Keep the row (and the open dialog) in sync after a score save without a
+  // full refetch, so the table does not flicker behind the modal.
+  const handleTrustScoreSaved = ({ businessId, brandRecallScore }) => {
+    setBusinesses((prev) =>
+      prev.map((b) => (b._id === businessId ? { ...b, brandRecallScore } : b))
+    );
+    // The dialog holds its own snapshot of the row — refresh it too so
+    // "Current Trust Score" / the Remove button reflect the new value.
+    setTrustScoreTarget((prev) =>
+      prev && prev._id === businessId ? { ...prev, brandRecallScore } : prev
+    );
+  };
+
   useEffect(() => {
     fetchPendingResellers();
+    fetchPendingWorkers();
   }, []);
+
+  const handleWorkerAction = async () => {
+    if (!workerConfirm) return;
+    try {
+      setWorkerLoading(true);
+      setError("");
+      await updateUserApprovalStatus(workerConfirm._id, workerConfirm.action);
+      setPendingWorkers((prev) => prev.filter((w) => w._id !== workerConfirm._id));
+      setWorkerConfirm(null);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to update worker boy registration");
+    } finally {
+      setWorkerLoading(false);
+    }
+  };
 
   const handleApproveReseller = async () => {
     if (!resellerConfirm) return;
@@ -314,6 +361,71 @@ const AdminBusinesses = () => {
         </Card>
       )}
 
+      {pendingWorkers.length > 0 && (
+        <Card>
+          <CardContent className="p-0">
+            <div className="border-b px-6 py-4">
+              <h2 className="text-sm font-semibold text-foreground">
+                Pending Worker Boy Registrations
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                First-time worker boy sign-ups stay pending until they are approved here.
+                Approved accounts move to the Poster Boys section.
+              </p>
+            </div>
+            <div className="divide-y">
+              {pendingWorkers.map((w) => (
+                <div
+                  key={w._id}
+                  className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs font-semibold">
+                        {getInitials(w.fullName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{w.fullName || "Unknown"}</p>
+                      <p className="truncate text-sm text-muted-foreground">{w.email || ""}</p>
+                      <CopyableId id={w.publicId} />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:justify-end">
+                    <span className="text-xs text-muted-foreground">
+                      Registration Type:{" "}
+                      <Badge variant="secondary" className="font-normal">
+                        WORKER BOY
+                      </Badge>
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Status: <StatusBadge status="pending" />
+                    </span>
+                    <Button
+                      size="sm"
+                      className="h-8 gap-1"
+                      onClick={() => setWorkerConfirm({ ...w, action: "approved" })}
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-8 gap-1"
+                      onClick={() => setWorkerConfirm({ ...w, action: "rejected" })}
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="p-0">
           <div className="flex flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -459,6 +571,20 @@ const AdminBusinesses = () => {
                             >
                               <Pencil className="mr-2 h-4 w-4" />
                               Edit
+                            </DropdownMenuItem>
+
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() =>
+                                setTrustScoreTarget({
+                                  _id: b._id,
+                                  name: b.name,
+                                  brandRecallScore: b.brandRecallScore ?? null,
+                                })
+                              }
+                            >
+                              <Award className="mr-2 h-4 w-4" />
+                              Set Trust Score
                             </DropdownMenuItem>
 
                             {b.status === "pending" && (
@@ -616,6 +742,17 @@ const AdminBusinesses = () => {
           if (!open) setViewTarget(null);
         }}
         businessId={viewTarget?._id}
+        showFraud
+      />
+
+      {/* Optional Brand Recall / Trust Score editor (admin-managed, per business) */}
+      <TrustScoreDialog
+        open={!!trustScoreTarget}
+        onOpenChange={(open) => {
+          if (!open) setTrustScoreTarget(null);
+        }}
+        businesses={trustScoreTarget ? [trustScoreTarget] : []}
+        onSaved={handleTrustScoreSaved}
       />
 
       {/* Approve/Reject Dialog */}
@@ -720,6 +857,53 @@ const AdminBusinesses = () => {
             <Button onClick={handleApproveReseller} disabled={resellerLoading}>
               {resellerLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Approve
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approve / Reject Worker Boy Dialog */}
+      <Dialog
+        open={!!workerConfirm}
+        onOpenChange={(open) => !open && setWorkerConfirm(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {workerConfirm?.action === "approved"
+                ? "Approve Worker Boy Account"
+                : "Reject Worker Boy Account"}
+            </DialogTitle>
+            <DialogDescription>
+              {workerConfirm?.action === "approved" ? (
+                <>
+                  Approve <strong>{workerConfirm?.fullName}</strong>? The account moves
+                  to the Poster Boys section and they can access their Worker Boy
+                  dashboard.
+                </>
+              ) : (
+                <>
+                  Reject <strong>{workerConfirm?.fullName}</strong>? They will not be
+                  able to log in.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setWorkerConfirm(null)}
+              disabled={workerLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={workerConfirm?.action === "approved" ? "default" : "destructive"}
+              onClick={handleWorkerAction}
+              disabled={workerLoading}
+            >
+              {workerLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {workerConfirm?.action === "approved" ? "Approve" : "Reject"}
             </Button>
           </DialogFooter>
         </DialogContent>

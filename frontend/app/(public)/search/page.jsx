@@ -112,8 +112,9 @@ function SearchContent() {
   const [currentPage, setCurrentPage] = useState(1);
 
   // Staffing ("Poster Boy") results sit on top when the query names the
-  // category or one of its skills; businesses keep their own section.
+  // category, one of its skills, or the visitor picks it in the Category filter.
   const [staffingCategory, setStaffingCategory] = useState(null);
+  const [allCategories, setAllCategories] = useState([]);
   const [posterBoys, setPosterBoys] = useState([]);
   const [pbLoading, setPbLoading] = useState(false);
 
@@ -151,6 +152,7 @@ function SearchContent() {
     getActiveCategories()
       .then(res => {
         const cats = res?.data?.categories || [];
+        setAllCategories(cats);
         setStaffingCategory(cats.find(c => c.kind === 'staffing') || null);
       })
       .catch(() => setStaffingCategory(null));
@@ -173,7 +175,9 @@ function SearchContent() {
       (s.name || "").toLowerCase().includes(query)
     )
   );
-  const showPosterBoys = matchesStaffingName || matchesStaffingSkill;
+  // Picking "Poster Boy" in the Category filter also lists the worker boys.
+  const staffingSelected = !!(staffingCategory && filterCategory === staffingCategory.name);
+  const showPosterBoys = matchesStaffingName || matchesStaffingSkill || staffingSelected;
 
   useEffect(() => {
     if (!showPosterBoys) {
@@ -184,7 +188,7 @@ function SearchContent() {
     let cancelled = false;
     setPbLoading(true);
     const params = { limit: 12 };
-    if (matchesStaffingName) {
+    if (matchesStaffingName || staffingSelected) {
       params.categoryId = staffingCategory._id;
     } else {
       params.search = keyword.trim();
@@ -195,7 +199,7 @@ function SearchContent() {
       .catch(() => { if (!cancelled) setPosterBoys([]); })
       .finally(() => { if (!cancelled) setPbLoading(false); });
     return () => { cancelled = true; };
-  }, [showPosterBoys, matchesStaffingName, staffingCategory, keyword, location]);
+  }, [showPosterBoys, matchesStaffingName, staffingSelected, staffingCategory, keyword, location]);
 
   useEffect(() => {
     const loc = (location || '').trim();
@@ -226,7 +230,7 @@ function SearchContent() {
   const hasActiveFilters = !!(keyword.trim() || location.trim() || filterCategory !== 'All Categories' || filterService !== 'All services' || filterOrder !== 'All order types' || filterDeal !== 'B2B, B2C & both' || filterLimit !== 'Any' || filterRating !== 'Any rating' || radiusApplied > 0);
 
   const filtersRef = useRef({});
-  filtersRef.current = { keyword, location, filterCategory, filterService, filterOrder, filterDeal, filterLimit, filterRating, filterOptions, radiusApplied, searchCoords };
+  filtersRef.current = { keyword, location, filterCategory, filterService, filterOrder, filterDeal, filterLimit, filterRating, filterOptions, allCategories, staffingCategory, radiusApplied, searchCoords };
 
   // Only refetch when the geo parameters actually change (radius off → the
   // reverse geocode finishing must not restart the search or flicker results).
@@ -237,14 +241,25 @@ function SearchContent() {
 
   const doFetch = useCallback(async (page = 1) => {
     const f = filtersRef.current;
+    // Staffing ("Poster Boy") is not a business category — its people are
+    // listed by the poster-boy section, so skip the business query entirely.
+    const staffingPick = !!(f.staffingCategory && f.filterCategory === f.staffingCategory.name);
+    if (staffingPick) {
+      setBusinesses([]);
+      setPagination({ page: 1, limit: 12, total: 0, pages: 0 });
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const params = { page, limit: 12 };
       if (f.keyword.trim()) params.search = f.keyword.trim();
       if (f.location.trim()) params.city = f.location.trim();
       if (f.filterCategory && f.filterCategory !== 'All Categories') {
-        const cat = f.filterOptions.categories?.find(c => c.name === f.filterCategory);
-        if (cat) params.categoryId = cat.id;
+        const cat =
+          (f.allCategories || []).find(c => c.name === f.filterCategory) ||
+          (f.filterOptions.categories || []).find(c => c.name === f.filterCategory);
+        if (cat && cat.kind !== 'staffing') params.categoryId = cat.id || cat._id;
       }
       if (f.filterService !== 'All services') {
         const v = API_MAP.filterService[f.filterService];
@@ -321,7 +336,12 @@ function SearchContent() {
     return () => ctx.revert();
   }, []);
 
-  const categoryOptions = ['All Categories', ...(filterOptions.categories?.map(c => c.name) || [])];
+  const categoryOptions = [
+    'All Categories',
+    ...(allCategories.length
+      ? allCategories.map(c => c.name)
+      : (filterOptions.categories?.map(c => c.name) || [])),
+  ];
 
   const isDark = theme === 'dark';
 
@@ -425,7 +445,12 @@ function SearchContent() {
             style={{ borderColor: isDark ? '#374151' : '#e5e7eb' }}>
             <div className="flex flex-col">
               <h2 className={`text-[20px] md:text-[24px] font-extrabold transition-colors ${isDark ? 'text-gray-100' : 'text-brand-navy'}`}>
-                {loading ? 'Searching...' : `${pagination.total} result${pagination.total !== 1 ? 's' : ''} found`}
+                {loading || (staffingSelected && pbLoading)
+                  ? 'Searching...'
+                  : (() => {
+                      const total = staffingSelected ? posterBoys.length : pagination.total;
+                      return `${total} result${total !== 1 ? 's' : ''} found`;
+                    })()}
               </h2>
               {hasActiveFilters && !loading && (
                 <p className={`text-[14px] font-medium mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -459,7 +484,7 @@ function SearchContent() {
                 </div>
               ) : posterBoys.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {posterBoys.map(pb => <PosterBoyCard key={pb._id} posterBoy={pb} />)}
+                  {posterBoys.map(pb => <PosterBoyCard key={pb._id} posterBoy={pb} detailHref={`/poster-boys/${pb._id}`} />)}
                 </div>
               ) : (
                 <p className={`text-[14px] font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>

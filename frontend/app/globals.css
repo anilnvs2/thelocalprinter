@@ -433,3 +433,11 @@ html:not(.dark) [data-radix-popper-content-wrapper] > div {
   box-shadow: 0 4px 16px rgba(0,0,0,.12), 0 16px 40px rgba(0,0,0,.08);
   border-radius: 8px;
 }
+
+/* ── Media protection: no drag-to-save, no image selection ── */
+img,
+video {
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+}

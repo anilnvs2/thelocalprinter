@@ -179,15 +179,15 @@ const Signup = () => {
 
   const getPageTitle = () => {
     if (step === STEPS.ROLE_SELECT) return "Create Account";
-    if (step === STEPS.BASIC_INFO) return isPosterBoyFlow ? "Poster Boy Registration" : isDirectFlow ? "Vendor Registration" : "Create Account";
+    if (step === STEPS.BASIC_INFO) return isPosterBoyFlow ? "Worker Boy Registration" : isDirectFlow ? "Vendor Registration" : "Create Account";
     if (step === STEPS.OTP_VERIFY) return "Verify Email";
     if (step === STEPS.SELECT_TYPE) return "Choose Registration Type";
-    return isPosterBoyFlow ? "Poster Boy Registration" : isDirectFlow ? "Vendor Registration" : registrationType === "RESELLER" ? "Reseller Application" : "Complete Registration";
+    return isPosterBoyFlow ? "Worker Boy Registration" : isDirectFlow ? "Vendor Registration" : registrationType === "RESELLER" ? "Reseller Application" : "Complete Registration";
   };
 
   const getPageSubtitle = () => {
     if (step === STEPS.ROLE_SELECT) return "Join Local Printer today";
-    if (step === STEPS.BASIC_INFO) return isPosterBoyFlow ? "Paste and distribute flyers with Local Printer" : isDirectFlow ? "List your business on Local Printer" : "Join Local Printer today";
+    if (step === STEPS.BASIC_INFO) return isPosterBoyFlow ? "Get directly order calls from companies" : isDirectFlow ? "List your business on Local Printer" : "Join Local Printer today";
     if (step === STEPS.OTP_VERIFY) return "We'll send a verification code to your email";
     if (step === STEPS.SELECT_TYPE) return "Select how you'll use the platform";
     return "Fill in the required details";
@@ -204,7 +204,7 @@ const Signup = () => {
         {[
           { value: "USER", icon: UserCheck, label: "User", desc: "Find printing services", active: "border-blue-500 bg-blue-500/5 text-blue-600 dark:text-blue-400", iconBg: "bg-blue-500/10 text-blue-500" },
           { value: "VENDOR", icon: Store, label: "Vendor", desc: "List your business", active: "border-orange-500 bg-orange-500/5 text-orange-600 dark:text-orange-400", iconBg: "bg-orange-500/10 text-orange-500" },
-          { value: "POSTER_BOY", icon: Megaphone, label: "Poster Boy", desc: "Paste & distribute flyers", active: "border-emerald-500 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400", iconBg: "bg-emerald-500/10 text-emerald-500" },
+          { value: "POSTER_BOY", icon: Megaphone, label: "Worker Boy", desc: "Get directly order calls from companies", active: "border-emerald-500 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400", iconBg: "bg-emerald-500/10 text-emerald-500" },
         ].map((r) => (
           <button key={r.value} type="button" onClick={() => { setRole(r.value); setStep(STEPS.BASIC_INFO); }}
             className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border-2 transition-all cursor-pointer hover:shadow-md ${role === r.value ? r.active : "border-border bg-card hover:border-border/80"}`}>

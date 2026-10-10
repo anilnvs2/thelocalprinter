@@ -89,6 +89,31 @@ const posterBoyProfileSchema = new mongoose.Schema(
       default: [],
     },
 
+    // ─── Work preferences (mandatory) ───
+    // How far the worker travels from their address.
+    workRadius: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    // Single worker or a team.
+    strength: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    // Order sizes the worker accepts (multi-select).
+    orderAccepted: {
+      type: [String],
+      default: [],
+    },
+    // Minimum notice the worker needs before a job starts.
+    bookingTimeline: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     // Past work photos / videos (max 10, enforced in the controller).
     workMedia: {
       type: [workMediaSchema],

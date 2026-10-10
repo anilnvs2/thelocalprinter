@@ -255,11 +255,29 @@ const businessSchema = new mongoose.Schema(
     },
 
     // ─── Section 16: Fraud / Hotlist (PRIVATE) ───
-    fraudReport: [{
-      contactName: { type: String, trim: true, default: "", select: false },
-      designation: { type: String, trim: true, default: "", select: false },
-      contactNumber: { type: String, trim: true, default: "", select: false },
-    }],
+    // select: false keeps it out of every response unless an admin endpoint
+    // explicitly asks for it with .select("+fraudReport").
+    fraudReport: {
+      type: [
+        {
+          contactName: { type: String, trim: true, default: "" },
+          designation: { type: String, trim: true, default: "" },
+          contactNumber: { type: String, trim: true, default: "" },
+        },
+      ],
+      select: false,
+      default: [],
+    },
+
+    // ─── Brand Recall / Trust Score (ADMIN-managed, optional) ───
+    // Manually assigned per-business by an admin. null = no score assigned.
+    // Range 0-10, decimals allowed (e.g. 8.5). Validated in the admin controller.
+    brandRecallScore: {
+      type: Number,
+      default: null,
+      min: [0, "Trust score must be at least 0"],
+      max: [10, "Trust score must be at most 10"],
+    },
 
     // ─── System Fields ───
     status: {

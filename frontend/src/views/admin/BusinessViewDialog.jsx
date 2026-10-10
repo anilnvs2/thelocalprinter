@@ -124,6 +124,8 @@ const VideoPlayer = ({ url, label }) => {
         <video
           src={url}
           controls
+          controlsList="nodownload noplaybackrate noremoteplayback"
+          disablePictureInPicture
           className="w-full max-h-[300px] object-contain"
         >
           Your browser does not support the video tag.
@@ -291,7 +293,8 @@ const BusinessViewDialog = ({
   businessId,
   fetchFn,
   showSystemInfo = true,
-  showFraud = true,
+  // Fraud / hotlist reports are admin-only; callers must opt in.
+  showFraud = false,
   title,
 }) => {
   const [loading, setLoading] = useState(true);
@@ -316,7 +319,7 @@ const BusinessViewDialog = ({
 
   const media = business?.verificationMedia || {};
   const social = business?.socialMedia || {};
-  const fraud = business?.fraudReport || {};
+  const fraudEntries = Array.isArray(business?.fraudReport) ? business.fraudReport : [];
   const coords = business?.gpsCoordinates || {};
 
   return (
@@ -552,12 +555,21 @@ const BusinessViewDialog = ({
                   <>
                     <Separator />
                     <Section title="Fraudulent Contact Hotlist" icon={AlertTriangle}>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <Field label="Contact Name" value={fraud.contactName} />
-                        <Field label="Designation" value={fraud.designation} />
-                        <Field label="Contact Number" value={fraud.contactNumber} mono />
-                        <Field label="Company Name" value={fraud.companyName} />
-                      </div>
+                      {fraudEntries.length === 0 ? (
+                        <p className="text-sm text-muted-foreground italic">
+                          No fraud / hotlist report submitted
+                        </p>
+                      ) : (
+                        <div className="space-y-4">
+                          {fraudEntries.map((entry, idx) => (
+                            <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <Field label={`Contact ${idx + 1} Name`} value={entry?.contactName} />
+                              <Field label="Designation" value={entry?.designation} />
+                              <Field label="Contact Number" value={entry?.contactNumber} mono />
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </Section>
                   </>
                 )}

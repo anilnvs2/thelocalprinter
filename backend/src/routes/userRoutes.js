@@ -13,6 +13,7 @@ const {
   getProfile,
   getPackage,
   getPublicPosterBoys,
+  getPublicPosterBoyById,
   revealPosterBoyContact,
 } = require("../controllers/userController");
 const {
@@ -52,6 +53,7 @@ router.get("/public/businesses/filters", getFilterOptions);
 router.get("/public/businesses/:id", getBusinessById);
 
 router.get("/public/poster-boys", getPublicPosterBoys);
+router.get("/public/poster-boys/:id", getPublicPosterBoyById);
 router.post("/public/poster-boys/:id/contact", revealPosterBoyContact);
 
 router.get("/public/categories", async (req, res) => {

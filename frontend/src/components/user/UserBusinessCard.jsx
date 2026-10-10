@@ -11,6 +11,7 @@ import {
   ArrowRight,
   User as UserIcon,
   BadgeCheck,
+  Award,
 } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
@@ -75,6 +76,15 @@ const UserBusinessCard = ({
     Number.isFinite(Number(b.gpsCoordinates.lng))
   );
 
+  // Optional, admin-managed Brand Recall / Trust Score (0-10). No score = no badge.
+  const trustScore =
+    b.brandRecallScore === null ||
+    b.brandRecallScore === undefined ||
+    b.brandRecallScore === ""
+      ? NaN
+      : Number(b.brandRecallScore);
+  const hasTrustScore = Number.isFinite(trustScore);
+
   const goToProfile = () => {
     if (detailHref) router.push(detailHref);
   };
@@ -100,12 +110,21 @@ const UserBusinessCard = ({
           <Building2 size={36} />
         )}
         {image && <WatermarkLogo position="bottom-right" size="sm" />}
-        {(isGpsVerified || reviewCount > 0) && (
+        {(isGpsVerified || reviewCount > 0 || hasTrustScore) && (
           <div className="absolute top-2.5 left-2.5 z-10 flex flex-col items-start gap-1.5">
             {isGpsVerified && (
               <span className="inline-flex items-center gap-1 bg-emerald-600/95 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full backdrop-blur-sm shadow-sm">
                 <BadgeCheck size={12} className="shrink-0" />
                 GPS Verified
+              </span>
+            )}
+            {hasTrustScore && (
+              <span
+                title="Trust Score assigned by the admin"
+                className="inline-flex items-center gap-1 bg-amber-500/95 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full backdrop-blur-sm shadow-sm whitespace-nowrap"
+              >
+                <Award size={12} className="shrink-0" />
+                Trust Score {trustScore}/10
               </span>
             )}
             {reviewCount > 0 && (

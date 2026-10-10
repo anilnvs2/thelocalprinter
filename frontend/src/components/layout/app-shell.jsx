@@ -13,6 +13,7 @@ export function AppShell({ children }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
+  const [pendingBusinessesCount, setPendingBusinessesCount] = useState(0);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const { user, logout, vendorOnboarding, checkVendorOnboarding } = useAuth();
   const router = useRouter();
@@ -31,9 +32,14 @@ export function AppShell({ children }) {
     const fetchPendingCount = async () => {
       try {
         const res = await api.get("/admin/approvals/count");
-        setPendingApprovalsCount(res.data.data.total);
+        const data = res.data.data || {};
+        setPendingApprovalsCount(data.total || 0);
+        // Businesses waiting on the admin: new registrations + edit/delete
+        // requests (vendor profile changes belong to the Vendors tab).
+        setPendingBusinessesCount((data.businesses || 0) + (data.changes || 0));
       } catch {
         setPendingApprovalsCount(0);
+        setPendingBusinessesCount(0);
       }
     };
     fetchPendingCount();
@@ -81,6 +87,7 @@ export function AppShell({ children }) {
           user={user}
           vendorOnboarding={vendorOnboarding}
           pendingApprovalsCount={pendingApprovalsCount}
+          pendingBusinessesCount={pendingBusinessesCount}
           unreadChatCount={unreadChatCount}
           onLogout={handleLogout}
           onNavigate={() => setMobileOpen(false)}

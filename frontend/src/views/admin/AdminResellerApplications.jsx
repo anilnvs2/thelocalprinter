@@ -128,6 +128,8 @@ const VideoPlayer = ({ url, label }) => {
         <video
           src={url}
           controls
+          controlsList="nodownload noplaybackrate noremoteplayback"
+          disablePictureInPicture
           className="w-full max-h-[300px] object-contain"
         >
           Your browser does not support the video tag.
