@@ -33,7 +33,13 @@ export default function StatsStrip() {
   }, []);
 
   return (
-    <section ref={sectionRef} className="bg-brand-orange py-10">
+    <section ref={sectionRef} className="bg-brand-orange py-12">
+      <div className="max-w-screen-xl mx-auto px-6 text-center mb-10">
+        <h2 className="text-[28px] md:text-[38px] font-extrabold text-white tracking-tight">
+          Our Goals &amp; Mission
+        </h2>
+        <div className="w-16 h-1 bg-white/60 rounded-full mx-auto mt-4" />
+      </div>
       <div className="max-w-screen-xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 divide-x divide-white/20 text-center">
         {stats.map((stat, i) => (
           <div key={i} className="flex flex-col items-center">
