@@ -56,3 +56,8 @@ export const getVendorReviewSummary = async () => {
   const response = await api.get("/vendor/reviews/summary");
   return response.data;
 };
+
+export const getFraudReports = async (params = {}) => {
+  const response = await api.get("/vendor/fraud-reports", { params });
+  return response.data;
+};

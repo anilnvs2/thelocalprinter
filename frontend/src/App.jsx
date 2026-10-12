@@ -20,6 +20,7 @@ import VendorPending from "./views/vendor/VendorPending";
 import VendorProfile from "./views/vendor/VendorProfile";
 import VendorReviews from "./views/vendor/VendorReviews";
 import VendorChat from "./views/vendor/VendorChat";
+import VendorFraudReports from "./views/vendor/VendorFraudReports";
 import AdminDashboard from "./views/admin/AdminDashboard";
 import AdminUsers from "./views/admin/AdminUsers";
 import AdminVendors from "./views/admin/AdminVendors";
@@ -87,6 +88,7 @@ const App = () => {
             <Route path="dashboard" element={<VendorDashboard />} />
             <Route path="businesses" element={<VendorBusinesses />} />
             <Route path="reviews" element={<VendorReviews />} />
+            <Route path="fraud-reports" element={<VendorFraudReports />} />
             <Route path="chat" element={<VendorChat />} />
             <Route path="package" element={<VendorPackage />} />
             <Route path="profile" element={<VendorProfile />} />

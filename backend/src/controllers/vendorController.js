@@ -5,6 +5,12 @@ const Category = require("../models/Category");
 const Settings = require("../models/Settings");
 const { applyBusinessPatch } = require("../utils/businessPatch");
 const { validateBusinessPayload } = require("../utils/businessValidation");
+const {
+  flattenFraudEntries,
+  filterFraudEntries,
+  paginateFraudEntries,
+  classifyQuery,
+} = require("../utils/fraudSearch");
 
 const hasDeleteRequest = (business) =>
   !!business.pendingChange && business.pendingChange.type === "DELETE";
@@ -663,6 +669,48 @@ exports.getPackage = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error fetching vendor package",
+    });
+  }
+};
+
+// ─── Fraud / Hotlist Report list & search ───
+// Reads ONLY the embedded fraudReport arrays on Business documents — the same
+// records vendors and admins submit through the Business Create/Edit flows.
+// No user, vendor, business-contact or other collection is ever queried.
+// Access is limited to authenticated VENDOR and ADMIN accounts.
+exports.getFraudReports = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = String(req.query.search || "").trim();
+
+    // Pull every business that carries a non-empty hotlist entry. This scans
+    // the complete fraud report dataset, not just the current page of rows.
+    const businesses = await Business.find({ "fraudReport.0": { $exists: true } })
+      .select("name createdAt +fraudReport")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const allEntries = flattenFraudEntries(businesses);
+    const filtered = filterFraudEntries(allEntries, search);
+    const { items, pagination } = paginateFraudEntries(filtered, page, limit);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        reports: items,
+        pagination,
+        search: {
+          query: search,
+          type: classifyQuery(search),
+          totalMatches: filtered.length,
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching fraud reports",
     });
   }
 };

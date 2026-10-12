@@ -21,6 +21,7 @@ import {
   MessageCircle,
   ClipboardCheck,
   Megaphone,
+  AlertTriangle,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -35,6 +36,7 @@ const navItemsByRole = {
   vendorFull: [
     { to: "/vendor/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/vendor/businesses", icon: Building2, label: "My Businesses" },
+    { to: "/vendor/fraud-reports", icon: AlertTriangle, label: "Fraud Report" },
     { to: "/vendor/reviews", icon: Star, label: "Reviews" },
     { to: "/vendor/chat", icon: MessageCircle, label: "Chat", showChatBadge: true },
     { to: "/vendor/package", icon: Package, label: "My Package" },

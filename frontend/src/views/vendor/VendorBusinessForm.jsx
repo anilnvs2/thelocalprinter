@@ -1843,7 +1843,7 @@ const VendorBusinessForm = () => {
               <span>This information is strictly private and will never be shown to public users.</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Private to you and the admin — never shown to users or other vendors.
+              Shared with authorized vendors and admins for fraud screening — never shown to public users.
             </p>
             {form.fraudReport.map((entry, idx) => (
                   <div key={idx} className="space-y-3 p-4 rounded-lg border border-border bg-card">

@@ -12,6 +12,7 @@ const {
   getProfile,
   updateProfile,
   getPackage,
+  getFraudReports,
 } = require("../controllers/vendorController");
 const {
   getVendorReviews,
@@ -21,6 +22,11 @@ const {
 const router = express.Router();
 
 router.use(authenticateUser);
+
+// Fraud / Hotlist report list & search — available to vendors and admins only
+// (the public and ordinary users can never reach this dataset).
+router.get("/fraud-reports", authorizeRole("VENDOR", "ADMIN"), getFraudReports);
+
 router.use(authorizeRole("VENDOR"));
 
 router.get("/onboarding-status", getOnboardingStatus);
