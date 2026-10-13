@@ -11,6 +11,7 @@ import {
   Loader2,
   Sun,
   Moon,
+  Navigation,
 } from 'lucide-react';
 import UserBusinessCard from '@/components/user/UserBusinessCard';
 import PosterBoyCard from '@/components/user/PosterBoyCard';
@@ -22,7 +23,7 @@ import { businessHref } from '@/lib/utils';
 // Increasing the radius only adds more (further) businesses — it never removes
 // ones already shown, so the result set grows monotonically. 0 ("Off") lists
 // every business in the city regardless of distance.
-const RADIUS_OPTIONS = [0, 5, 10, 25, 50];
+const RADIUS_OPTIONS = [0, 5, 10, 20, 30, 50];
 const RADIUS_DEFAULT = 5;
 
 const CustomDropdown = ({ value, onChange, options, placeholder = "Select...", minWidth = "min-w-[220px]", align = "left", direction = "down" }) => {
@@ -345,6 +346,17 @@ function SearchContent() {
       : (filterOptions.categories?.map(c => c.name) || [])),
   ];
 
+  // When a radius search comes back empty, offer the next size up
+  // (5 → 10 → 20 → 30 → 50) so the visitor can widen the area in one tap.
+  const nextRadiusOption = RADIUS_OPTIONS.find((v) => v > radiusApplied) ?? null;
+  const canTryLargerRadius =
+    !loading &&
+    businesses.length === 0 &&
+    !!searchCoords &&
+    radiusApplied > 0 &&
+    nextRadiusOption !== null &&
+    !(showPosterBoys && posterBoys.length > 0);
+
   const isDark = theme === 'dark';
 
   return (
@@ -532,13 +544,23 @@ function SearchContent() {
               <h3 className={`text-[22px] font-extrabold mb-2 ${isDark ? 'text-gray-100' : 'text-brand-navy'}`}>
                 {showPosterBoys && posterBoys.length > 0
                   ? 'No printing businesses found for this query'
-                  : 'No businesses found nearby'}
+                  : canTryLargerRadius
+                    ? `No businesses found within ${radiusApplied} km`
+                    : 'No businesses found nearby'}
               </h3>
               <p className={`text-[15px] font-medium mb-8 max-w-[400px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                 {showPosterBoys && posterBoys.length > 0
                   ? 'Poster boys are listed above. Try another keyword or clear filters.'
-                  : "Try adjusting your search filters or expanding the area to find what you're looking for."}
+                  : canTryLargerRadius
+                    ? 'Widen the radius to look further out for printing businesses near you.'
+                    : "Try adjusting your search filters or expanding the area to find what you're looking for."}
               </p>
+              {canTryLargerRadius && (
+                <button onClick={() => setRadius(nextRadiusOption)}
+                  className="mb-3 bg-brand-orange hover:bg-brand-orange/90 text-white px-8 py-3.5 rounded-full font-bold text-[14px] transition-all shadow-md hover:shadow-lg flex items-center gap-2">
+                  <Navigation className="w-4 h-4" /> Try {nextRadiusOption} km
+                </button>
+              )}
               <button onClick={clearAllFilters}
                 className="bg-[#1C364F] hover:bg-[#122538] text-white px-8 py-3.5 rounded-full font-bold text-[14px] transition-all shadow-md hover:shadow-lg flex items-center gap-2">
                 <X className="w-4 h-4" /> Clear All Filters
