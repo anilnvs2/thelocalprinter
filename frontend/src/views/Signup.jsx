@@ -65,7 +65,7 @@ const Signup = () => {
     const e = {};
     if (!fullName.trim()) e.fullName = "Full name is required";
     else if (fullName.trim().length < 2) e.fullName = "Must be at least 2 characters";
-    if (role === "USER" || role === "VENDOR") {
+    if (role === "USER" || role === "VENDOR" || role === "POSTER_BOY") {
       const whatsapp = whatsappNumber.trim();
       if (!whatsapp) e.whatsappNumber = "WhatsApp number is required";
       else if (!/^\+?[\d\s\-()]+$/.test(whatsapp) || whatsapp.replace(/\D/g, "").length < 7 || whatsapp.replace(/\D/g, "").length > 15)
@@ -228,7 +228,7 @@ const Signup = () => {
         {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
       </div>
       <div className="space-y-1.5">
-        <Label className="text-sm font-medium text-foreground">WhatsApp Number {(role === "USER" || role === "VENDOR") && "*"}</Label>
+        <Label className="text-sm font-medium text-foreground">WhatsApp Number {(role === "USER" || role === "VENDOR" || role === "POSTER_BOY") && "*"}</Label>
         <div className="relative"><Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input type="tel" placeholder="Enter WhatsApp number" value={whatsappNumber} onChange={(e) => { setWhatsappNumber(e.target.value); if (errors.whatsappNumber) setErrors((p) => ({ ...p, whatsappNumber: "" })); }} disabled={loading} className="pl-9 h-11" /></div>
         {errors.whatsappNumber && <p className="text-xs text-destructive">{errors.whatsappNumber}</p>}
