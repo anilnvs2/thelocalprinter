@@ -18,11 +18,12 @@ import { searchPublicBusinesses, getPublicFilterOptions, getLocationAutocomplete
 import { getSavedCity, clearLocation, onSavedLocationChange } from '@/lib/savedLocation';
 import { businessHref } from '@/lib/utils';
 
-// 0 = Off. Radius is opt-in: a city-level location (Near Me, typed city) must
-// list every business in that city, not only those within a few km of the
-// city-centre coordinates the geocoder returns.
+// Radius filters businesses by distance from the search location. Default 5 km.
+// Increasing the radius only adds more (further) businesses — it never removes
+// ones already shown, so the result set grows monotonically. 0 ("Off") lists
+// every business in the city regardless of distance.
 const RADIUS_OPTIONS = [0, 5, 10, 25, 50];
-const RADIUS_DEFAULT = 0;
+const RADIUS_DEFAULT = 5;
 
 const CustomDropdown = ({ value, onChange, options, placeholder = "Select...", minWidth = "min-w-[220px]", align = "left", direction = "down" }) => {
   const [isOpen, setIsOpen] = useState(false);

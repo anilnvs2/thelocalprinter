@@ -162,6 +162,13 @@ const UserBusinessCard = ({
       </div>
 
       <CardContent className="p-4 flex flex-col gap-1.5 flex-1">
+        {b.distance != null && (
+          <span className="inline-flex items-center gap-1 self-start text-[11px] font-bold text-primary">
+            <Navigation size={12} className="shrink-0" />
+            {b.distance} km away
+          </span>
+        )}
+
         <h3 className="text-sm font-bold text-foreground truncate">{b.name}</h3>
 
         {b.vendor?.publicId && (
@@ -221,7 +228,7 @@ const UserBusinessCard = ({
           </div>
         )}
 
-        {(b.city || b.address || b.distance != null) && (
+        {(b.city || b.address) && (
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
             <MapPin size={12} className="shrink-0" />
             {directionsHref ? (
@@ -240,11 +247,6 @@ const UserBusinessCard = ({
               <span className="truncate">
                 {b.city}
                 {b.address ? `, ${b.address}` : ""}
-              </span>
-            )}
-            {b.distance != null && (
-              <span className="inline-flex items-center gap-0.5 shrink-0 text-primary font-medium">
-                <Navigation size={11} /> {b.distance} km
               </span>
             )}
           </p>
