@@ -109,6 +109,9 @@ const businessSchema = new mongoose.Schema(
         {
           categoryId: { type: mongoose.Schema.Types.ObjectId, ref: "Category", default: null },
           serviceIds: { type: [mongoose.Schema.Types.ObjectId], ref: "Category", default: [] },
+          // Admin-assigned tags for this category (vendors cannot edit these —
+          // only the admin manages multi-category entries and their tags).
+          tags: { type: [String], default: [] },
           _id: false,
         },
       ],

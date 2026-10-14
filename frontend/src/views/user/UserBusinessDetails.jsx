@@ -429,6 +429,16 @@ const UserBusinessDetails = ({ publicMode = false }) => {
     ...serviceList,
     ...additionalCats.flatMap((e) => (Array.isArray(e.serviceIds) ? e.serviceIds : [])),
   ].filter((s, i, arr) => arr.findIndex((x) => (x?._id || x) === (s?._id || s)) === i);
+  // Global tags + admin-assigned per-category tags, de-duplicated.
+  const allTags = [
+    ...(Array.isArray(business.tags) ? business.tags : []),
+    ...additionalCats.flatMap((e) => (Array.isArray(e.tags) ? e.tags : [])),
+  ].filter(
+    (t, i, arr) =>
+      typeof t === "string" &&
+      t.trim() &&
+      arr.findIndex((x) => String(x).toLowerCase() === String(t).toLowerCase()) === i
+  );
   const socials = [
     { key: "facebook", label: "Facebook", url: business.socialMedia?.facebook?.trim(), cls: "text-[#1877F2] border-[#1877F2]/30 hover:bg-[#1877F2]/5" },
     { key: "instagram", label: "Instagram", url: business.socialMedia?.instagram?.trim(), cls: "text-[#E1306C] border-[#E1306C]/30 hover:bg-[#E1306C]/5" },
@@ -457,7 +467,7 @@ const UserBusinessDetails = ({ publicMode = false }) => {
   const hasContact = business.contactName || business.phone || business.whatsapp || business.contactEmail || business.website;
   const hasCapabilities =
     business.category || allServiceList.length > 0 || business.serviceType ||
-    (business.addonServices?.length || 0) > 0 || (business.tags?.length || 0) > 0;
+    (business.addonServices?.length || 0) > 0 || allTags.length > 0;
   const hasOrderInfo = business.orderLimits || business.customerType || business.orderingMethod;
   const hasPolicies =
     business.returnReplacementPolicy || business.inHouseDesignerAvailable || business.customerLocationVisitAvailable;
@@ -700,8 +710,8 @@ const UserBusinessDetails = ({ publicMode = false }) => {
               {(business.addonServices?.length || 0) > 0 && (
                 <ArrayField label="Add-on Services" value={business.addonServices} />
               )}
-              {(business.tags?.length || 0) > 0 && (
-                <ArrayField label="Tags" value={business.tags} />
+              {(allTags.length || 0) > 0 && (
+                <ArrayField label="Tags" value={allTags} />
               )}
             </div>
           </ProfileSection>

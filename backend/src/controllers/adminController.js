@@ -575,7 +575,24 @@ exports.adminUpdateBusiness = async (req, res) => {
     if (data.categoryId !== undefined) business.categoryId = data.categoryId;
     if (data.serviceIds !== undefined) business.serviceIds = data.serviceIds;
     // Admin-only multi-category support: each entry pairs a category with the
-    // services selected under it. Entries without a categoryId are dropped.
+    // services selected under it, plus admin-assigned tags for it. Entries
+    // without a categoryId are dropped. Tags are trimmed, de-duplicated and
+    // capped so a bad payload cannot bloat the document.
+    const cleanTags = (tags) => {
+      if (!Array.isArray(tags)) return [];
+      const seen = new Set();
+      const out = [];
+      for (const t of tags) {
+        const v = typeof t === "string" ? t.trim() : "";
+        if (!v) continue;
+        const key = v.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(v.slice(0, 60));
+        if (out.length >= 30) break;
+      }
+      return out;
+    };
     if (data.additionalCategories !== undefined) {
       business.additionalCategories = (Array.isArray(data.additionalCategories) ? data.additionalCategories : [])
         .map((entry) => ({
@@ -583,10 +600,11 @@ exports.adminUpdateBusiness = async (req, res) => {
           serviceIds: Array.isArray(entry?.serviceIds)
             ? entry.serviceIds.filter((s) => s)
             : [],
+          tags: cleanTags(entry?.tags),
         }))
         .filter((entry) => entry.categoryId);
     }
-    if (data.tags !== undefined) business.tags = data.tags;
+    if (data.tags !== undefined) business.tags = cleanTags(data.tags);
     if (data.address !== undefined) business.address = data.address;
     if (data.city !== undefined) business.city = data.city;
     if (data.gpsCoordinates !== undefined) business.gpsCoordinates = data.gpsCoordinates;
@@ -1357,6 +1375,37 @@ exports.deleteSubcategory = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error deleting subcategory",
+    });
+  }
+};
+
+// ─── Business tags (admin tag picker suggestions) ───
+
+// Every distinct tag currently used on businesses — global `tags` plus the
+// admin-assigned per-category (`additionalCategories.tags`) tags — so the
+// admin can pick existing tags or type new ones.
+exports.getAllTags = async (req, res) => {
+  try {
+    const [globalTags, categoryTags] = await Promise.all([
+      Business.distinct("tags"),
+      Business.distinct("additionalCategories.tags"),
+    ]);
+    const seen = new Set();
+    const tags = [];
+    for (const t of [...(globalTags || []), ...(categoryTags || [])]) {
+      const v = typeof t === "string" ? t.trim() : "";
+      if (!v) continue;
+      const key = v.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      tags.push(v);
+    }
+    tags.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    res.status(200).json({ success: true, data: { tags } });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching tags",
     });
   }
 };

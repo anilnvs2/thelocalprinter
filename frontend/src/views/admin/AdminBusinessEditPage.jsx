@@ -30,7 +30,8 @@ import {
   Trash2,
   Navigation,
 } from "lucide-react";
-import { getAdminBusinessById, adminUpdateBusiness } from "../../services/adminService";
+import { getAdminBusinessById, adminUpdateBusiness, getAllTags } from "../../services/adminService";
+import { TagPicker } from "../../components/shared/tag-picker";
 import api from "../../services/api";
 import { mergeCategories } from "../../data/vendorCategories";
 import { uploadToCloudinary, ALLOWED_FOLDERS } from "../../lib/cloudinary";
@@ -191,45 +192,6 @@ const FormField = ({ label, required, error, children, hint }) => (
   </div>
 );
 
-const TagInput = ({ tags, onChange, placeholder }) => {
-  const [input, setInput] = useState("");
-
-  const addTag = () => {
-    const val = input.trim();
-    if (val && !tags.includes(val)) onChange([...tags, val]);
-    setInput("");
-  };
-
-  const removeTag = (tag) => onChange(tags.filter((t) => t !== tag));
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") { e.preventDefault(); addTag(); }
-  };
-
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {tags.map((tag) => (
-          <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary text-primary-foreground rounded-full text-xs font-medium">
-            {tag}
-            <button type="button" onClick={() => removeTag(tag)} className="hover:opacity-70"><X size={12} /></button>
-          </span>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder || "Type and press Enter"}
-          className="flex-1"
-        />
-        <Button type="button" variant="outline" size="sm" onClick={addTag}>Add</Button>
-      </div>
-    </div>
-  );
-};
-
 const RadioCards = ({ options, value, onChange }) => (
   <div className="space-y-2">
     {options.map((opt) => (
@@ -312,6 +274,8 @@ const AdminBusinessEditPage = () => {
   const [newCustomService, setNewCustomService] = useState("");
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState("");
+  // Existing tags across businesses for the tag picker suggestions.
+  const [tagSuggestions, setTagSuggestions] = useState([]);
 
   const machineryVideoRef = useRef(null);
   const outletVideoRef = useRef(null);
@@ -327,6 +291,9 @@ const AdminBusinessEditPage = () => {
         mergeCategories(res.data.data.categories || []).filter((c) => c.kind !== "staffing")
       );
     }).catch(() => {});
+    getAllTags()
+      .then((res) => setTagSuggestions(res?.data?.tags || []))
+      .catch(() => setTagSuggestions([]));
   }, []);
 
   // Business saved without a categoryId (static category): resolve it by name
@@ -371,6 +338,7 @@ const AdminBusinessEditPage = () => {
             .map((entry) => ({
               categoryId: entry?.categoryId?._id || entry?.categoryId || null,
               serviceIds: (Array.isArray(entry?.serviceIds) ? entry.serviceIds : []).map((s) => s?._id || s),
+              tags: Array.isArray(entry?.tags) ? entry.tags.filter((t) => typeof t === "string" && t.trim()) : [],
             }))
             .filter((entry) => entry.categoryId),
           tags: b.tags || [], address: b.address || "", city: b.city || "",
@@ -438,11 +406,20 @@ const AdminBusinessEditPage = () => {
     if (!categoryId) return;
     if (form.categoryId === categoryId) return; // primary already covers it
     if (form.additionalCategories.some((e) => e.categoryId === categoryId)) return;
-    updateField("additionalCategories", [...form.additionalCategories, { categoryId, serviceIds: [] }]);
+    updateField("additionalCategories", [...form.additionalCategories, { categoryId, serviceIds: [], tags: [] }]);
   };
 
   const removeAdditionalCategory = (categoryId) => {
     updateField("additionalCategories", form.additionalCategories.filter((e) => e.categoryId !== categoryId));
+  };
+
+  const updateAdditionalTags = (categoryId, tags) => {
+    updateField(
+      "additionalCategories",
+      form.additionalCategories.map((entry) =>
+        entry.categoryId === categoryId ? { ...entry, tags } : entry
+      )
+    );
   };
 
   const toggleAdditionalService = (categoryId, serviceId) => {
@@ -886,14 +863,32 @@ const AdminBusinessEditPage = () => {
                       ) : (
                         <p className="text-xs text-muted-foreground">No services available for this category.</p>
                       )}
+                      <div className="pt-1">
+                        <p className="text-xs font-medium text-muted-foreground mb-1.5">
+                          Tags for {cat?.name || "this category"}
+                        </p>
+                        <TagPicker
+                          tags={entry.tags || []}
+                          onChange={(val) => updateAdditionalTags(entry.categoryId, val)}
+                          suggestions={tagSuggestions}
+                          placeholder={`e.g. ${(services[0]?.name || "banner").toLowerCase()}...`}
+                          hint="Pick an existing tag or type a new one and press Enter."
+                        />
+                      </div>
                     </div>
                   );
                 })
               )}
             </div>
-            <FormField label="Tags" hint="Press Enter to add a tag">
-              <TagInput tags={form.tags} onChange={(val) => updateField("tags", val)} placeholder="e.g. banner, visiting card, brochure" />
-            </FormField>
+            {(() => {
+              const primaryCat = categories.find((c) => c._id === form.categoryId);
+              const primaryName = primaryCat?.name || form.category || "primary category";
+              return (
+                <FormField label={`Tags — ${primaryName}`} hint="Pick an existing tag or type a new one and press Enter">
+                  <TagPicker tags={form.tags} onChange={(val) => updateField("tags", val)} suggestions={tagSuggestions} placeholder="e.g. banner, visiting card, brochure" />
+                </FormField>
+              );
+            })()}
             <FormField label="Address">
               <Input value={form.address} onChange={(e) => updateField("address", e.target.value)} placeholder="e.g. 123 Main Street, Andheri West" />
             </FormField>

@@ -193,6 +193,11 @@ export const deleteSubcategory = async (id) => {
   return response.data;
 };
 
+export const getAllTags = async () => {
+  const response = await api.get("/admin/businesses/tags");
+  return response.data;
+};
+
 // ─── Settings ───
 
 export const getSettings = async (category = "") => {

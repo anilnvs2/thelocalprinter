@@ -37,6 +37,7 @@ const {
   updateUserApprovalStatus,
   updateProfileChangeStatus,
   getPendingApprovalsCount,
+  getAllTags,
 } = require("../controllers/adminController");
 const {
   getAdminReviews,
@@ -69,6 +70,7 @@ router.patch("/vendors/:id/toggle-status", toggleVendorStatus);
 router.delete("/vendors/:id", deleteVendor);
 
 router.get("/businesses", getBusinesses);
+router.get("/businesses/tags", getAllTags);
 router.get("/businesses/:id", getBusinessById);
 router.put("/businesses/:id", adminUpdateBusiness);
 router.patch("/businesses/:id/status", updateBusinessStatus);

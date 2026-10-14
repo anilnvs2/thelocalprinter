@@ -93,6 +93,7 @@ exports.getPublicBusinesses = async (req, res) => {
         { category: { $regex: safeSearch, $options: "i" } },
         { description: { $regex: safeSearch, $options: "i" } },
         { tags: { $regex: safeSearch, $options: "i" } },
+        { "additionalCategories.tags": { $regex: safeSearch, $options: "i" } },
       ];
       // Header search sends category/subcategory display names as free text
       // (e.g. "3D Printing"). Resolve them to category references so
