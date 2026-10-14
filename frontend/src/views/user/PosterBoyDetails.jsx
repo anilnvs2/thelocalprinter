@@ -23,6 +23,7 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import CopyableId from "../../components/admin/CopyableId";
 import WatermarkLogo from "../../components/media/WatermarkLogo";
+import LazyVideo from "../../components/media/LazyVideo";
 import { VideoPlayer } from "../../components/media/MediaViewers";
 import { splitWorkMedia, toPlayableVideoUrl } from "../../lib/cloudinary";
 
@@ -325,12 +326,9 @@ const PosterBoyDetails = () => {
                     onClick={() => openVideoPreview(i)}
                     className="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
                   >
-                    <video
+                    <LazyVideo
                       src={toPlayableVideoUrl(v.url)}
-                      className="h-full w-full object-cover pointer-events-none"
-                      muted
-                      playsInline
-                      preload="metadata"
+                      className="h-full w-full object-cover"
                     />
                     <span className="absolute inset-0 flex items-center justify-center bg-black/30">
                       <Play size={22} className="text-white" fill="currentColor" />

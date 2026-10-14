@@ -63,6 +63,17 @@ const ProtectedVideo = ({ src, label, variant = "player", className = "", videoC
     if (wrapRef.current && document.fullscreenElement === wrapRef.current) {
       document.exitFullscreen?.().catch(() => {});
     }
+    // Stop any decode/buffering so nothing survives the close.
+    const v = videoRef.current;
+    if (v) {
+      try {
+        v.pause();
+        v.removeAttribute("src");
+        v.load();
+      } catch {
+        /* ignore */
+      }
+    }
   }, []);
 
   const block = (e) => {

@@ -158,7 +158,7 @@ const VendorFraudReports = () => {
       <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 text-amber-600 text-sm">
         <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
         <span>
-          Reports are shared with authorized vendors and admins only — never shown to public users.
+          Reports are shared with authorized vendors only — never shown to public users.
         </span>
       </div>
 
@@ -288,7 +288,7 @@ const VendorFraudReports = () => {
           <DialogHeader>
             <DialogTitle>Add Fraud Report</DialogTitle>
             <DialogDescription>
-              Report a contact to the shared hotlist. It is visible to all vendors and admins immediately.
+              Report a contact to the shared hotlist. It is visible to all vendors immediately.
             </DialogDescription>
           </DialogHeader>
 

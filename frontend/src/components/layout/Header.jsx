@@ -379,6 +379,11 @@ export default function Header() {
     } else {
       document.body.style.overflow = 'unset';
     }
+    // If the header unmounts (route change) while the menu is open, never
+    // leave the body scroll-locked — that looks like a frozen page.
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
   }, [isMobileMenuOpen]);
 
   const userInitial = user?.role ? user.role.charAt(0) : '?';

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, Eye } from "lucide-react";
 import WatermarkLogo from "./WatermarkLogo";
 import { toAutoVideoUrl } from "../../lib/cloudinary";
@@ -13,6 +13,25 @@ import { toAutoVideoUrl } from "../../lib/cloudinary";
  * worker's photos/videos open identically to a vendor's.
  */
 const VideoPlayer = ({ url, label }) => {
+  const videoRef = useRef(null);
+
+  // On unmount (lightbox closed) stop decode/buffering immediately so no
+  // background media activity survives the close.
+  useEffect(
+    () => () => {
+      const v = videoRef.current;
+      if (!v) return;
+      try {
+        v.pause();
+        v.removeAttribute("src");
+        v.load();
+      } catch {
+        /* ignore */
+      }
+    },
+    []
+  );
+
   if (!url) {
     return (
       <div className="space-y-1">
@@ -27,6 +46,7 @@ const VideoPlayer = ({ url, label }) => {
       <p className="text-xs text-muted-foreground">{label}</p>
       <div className="relative rounded-lg overflow-hidden bg-black">
         <video
+          ref={videoRef}
           controls
           controlsList="nodownload noplaybackrate noremoteplayback"
           disablePictureInPicture
