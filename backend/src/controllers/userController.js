@@ -5,7 +5,7 @@ const Category = require("../models/Category");
 const Review = require("../models/Review");
 const Settings = require("../models/Settings");
 const PosterBoyProfile = require("../models/PosterBoyProfile");
-const { escapeRegex, distanceKm, applyGeoBounds, cityToken } = require("../utils/geo");
+const { escapeRegex, distanceKm, applyGeoBounds, locationTokens, locationTextOr, matchesLocationText, geoBoundsClause, noGpsClause } = require("../utils/geo");
 const { POSTER_BOY_CATEGORY_SLUG } = require("../utils/posterBoyCategory");
 
 // Rate limit for the public "reveal contact" endpoint (per IP, per profile).
@@ -66,9 +66,17 @@ exports.getPublicBusinesses = async (req, res) => {
     const orderingMethod = req.query.orderingMethod || "";
     const orderLimits = req.query.orderLimits || "";
     const minRating = parseFloat(req.query.minRating) || 0;
-    const lat = parseFloat(req.query.lat) || null;
-    const lng = parseFloat(req.query.lng) || null;
+    const latRaw = parseFloat(req.query.lat);
+    const lngRaw = parseFloat(req.query.lng);
+    const lat = Number.isFinite(latRaw) ? latRaw : null;
+    const lng = Number.isFinite(lngRaw) ? lngRaw : null;
     const radius = parseFloat(req.query.radius) || 0;
+    // Coords known -> we can always compute distance. Radius > 0 additionally filters.
+    const hasCoords = lat !== null && lng !== null;
+    const filterByRadius = hasCoords && radius > 0;
+    // "Bara Bazar, Kolkata, West Bengal" -> ["Bara Bazar", "Kolkata", ...].
+    // Businesses store City ("Kolkata") + full address, so every token is tried.
+    const locTokens = locationTokens(city);
 
     const query = { status: "approved", isActive: true };
 
@@ -79,6 +87,8 @@ exports.getPublicBusinesses = async (req, res) => {
         { city: { $regex: safeSearch, $options: "i" } },
         { address: { $regex: safeSearch, $options: "i" } },
         { category: { $regex: safeSearch, $options: "i" } },
+        { description: { $regex: safeSearch, $options: "i" } },
+        { tags: { $regex: safeSearch, $options: "i" } },
       ];
       // Header search sends category/subcategory display names as free text
       // (e.g. "3D Printing"). Resolve them to category references so
@@ -123,28 +133,50 @@ exports.getPublicBusinesses = async (req, res) => {
     } else if (category) {
       query.category = { $regex: category, $options: "i" };
     }
-    // The location field carries a display string like "Mandirbazar, West Bengal"
-    // while businesses store only the city ("Mandirbazar"). Match on the city
-    // token (text before the first comma) so display strings still match.
-    if (city) {
-      query.city = { $regex: escapeRegex(cityToken(city)), $options: "i" };
+    // Location text ("Bara Bazar, Kolkata, ...") matches City OR Address on ANY
+    // token, so a locality search finds businesses filed under the parent city
+    // (City "Kolkata", address "... Bara Bazar, Kolkata ...").
+    // When geo-filtering, the radius is the primary filter and the city text
+    // must NOT block nearby results — it is only a fallback for documents
+    // without GPS coordinates (applied post-query below).
+    if (locTokens.length > 0 && !filterByRadius) {
+      query.$and = query.$and || [];
+      query.$and.push({ $or: locationTextOr(locTokens) });
     }
     if (serviceType) query.serviceType = serviceType;
     if (customerType) query.customerType = customerType;
     if (orderingMethod) query.orderingMethod = orderingMethod;
     if (orderLimits) query.orderLimits = orderLimits;
 
-    const useGeo = applyGeoBounds(
-      query,
-      lat,
-      lng,
-      radius,
-      "gpsCoordinates.lat",
-      "gpsCoordinates.lng"
-    );
+    // Bounding-box pre-filter only when actually filtering by radius.
+    // Distance is still computed whenever coords are known (see below) so
+    // cards can show "X km away" even with radius Off.
+    // When location text is present, docs WITHOUT gps must survive the
+    // pre-filter so the JS text fallback below can keep them.
+    let useGeo = false;
+    if (filterByRadius && locTokens.length > 0) {
+      const bounds = geoBoundsClause(lat, lng, radius, "gpsCoordinates.lat", "gpsCoordinates.lng");
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          bounds,
+          noGpsClause("gpsCoordinates.lat", "gpsCoordinates.lng"),
+        ],
+      });
+      useGeo = true;
+    } else {
+      useGeo = applyGeoBounds(
+        query,
+        lat,
+        lng,
+        filterByRadius ? radius : 0,
+        "gpsCoordinates.lat",
+        "gpsCoordinates.lng"
+      );
+    }
 
     let allBusinesses;
-    if (minRating > 0 || useGeo) {
+    if (minRating > 0 || hasCoords || useGeo) {
       allBusinesses = await Business.find(query)
         .populate("categoryId", "name slug image")
         .populate("serviceIds", "name slug")
@@ -222,15 +254,37 @@ exports.getPublicBusinesses = async (req, res) => {
       const obj = b.toObject();
       obj.ratingSummary = allRatingMap[b._id.toString()] || { averageRating: 0, reviewCount: 0 };
       obj.isWishlisted = allWishlistSet.has(b._id.toString());
-      if (useGeo && obj.gpsCoordinates?.lat && obj.gpsCoordinates?.lng) {
-        obj.distance = distanceKm(lat, lng, obj.gpsCoordinates.lat, obj.gpsCoordinates.lng);
+      const gLat = Number(obj.gpsCoordinates?.lat);
+      const gLng = Number(obj.gpsCoordinates?.lng);
+      if (hasCoords && Number.isFinite(gLat) && Number.isFinite(gLng)) {
+        obj.distance = distanceKm(lat, lng, gLat, gLng);
       }
       return obj;
     });
 
     if (useGeo) {
-      enriched = enriched.filter((b) => b.distance !== undefined && b.distance <= radius);
-      enriched.sort((a, b) => a.distance - b.distance);
+      // Radius is primary: keep everything within range. Documents without
+      // GPS cannot prove distance — keep them only when their city/address
+      // text matches the searched location (e.g. "Kolkata" business for a
+      // "Bara Bazar, Kolkata" search).
+      enriched = enriched.filter((b) => {
+        if (b.distance !== undefined) return b.distance <= radius;
+        if (locTokens.length === 0) return false;
+        return matchesLocationText(b.city, b.address, locTokens);
+      });
+      enriched.sort((a, b) => {
+        if (a.distance === undefined) return 1;
+        if (b.distance === undefined) return -1;
+        return a.distance - b.distance;
+      });
+    } else if (hasCoords) {
+      // Radius Off (or coords only for display): no filtering, nearest first
+      // so "X km away" is still meaningful.
+      enriched.sort((a, b) => {
+        if (a.distance === undefined) return 1;
+        if (b.distance === undefined) return -1;
+        return a.distance - b.distance;
+      });
     }
 
     if (minRating > 0) {
@@ -831,9 +885,14 @@ exports.getPublicPosterBoys = async (req, res) => {
     const serviceId = req.query.serviceId || "";
     const categoryId = req.query.categoryId || "";
     const city = req.query.city || "";
-    const lat = parseFloat(req.query.lat) || null;
-    const lng = parseFloat(req.query.lng) || null;
+    const latRaw = parseFloat(req.query.lat);
+    const lngRaw = parseFloat(req.query.lng);
+    const lat = Number.isFinite(latRaw) ? latRaw : null;
+    const lng = Number.isFinite(lngRaw) ? lngRaw : null;
     const radius = parseFloat(req.query.radius) || 0;
+    const hasCoords = lat !== null && lng !== null;
+    const filterByRadius = hasCoords && radius > 0;
+    const locTokens = locationTokens(city);
 
     const query = { status: "approved", profileCompleted: true };
 
@@ -842,8 +901,12 @@ exports.getPublicPosterBoys = async (req, res) => {
     } else if (categoryId) {
       query.categoryId = categoryId;
     }
-    if (city) {
-      query.city = { $regex: escapeRegex(cityToken(city)), $options: "i" };
+    // Same locality rule as businesses: ANY token may match city/address.
+    // Skipped when geo-filtering (radius decides), kept as fallback for
+    // profiles without GPS.
+    if (locTokens.length > 0 && !filterByRadius) {
+      query.$and = query.$and || [];
+      query.$and.push({ $or: locationTextOr(locTokens) });
     }
     if (search) {
       const safe = escapeRegex(search);
@@ -861,14 +924,27 @@ exports.getPublicPosterBoys = async (req, res) => {
       ];
     }
 
-    const useGeo = applyGeoBounds(
-      query,
-      lat,
-      lng,
-      radius,
-      "gpsCoordinates.lat",
-      "gpsCoordinates.lng"
-    );
+    let useGeo = false;
+    if (filterByRadius && locTokens.length > 0) {
+      const bounds = geoBoundsClause(lat, lng, radius, "gpsCoordinates.lat", "gpsCoordinates.lng");
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          bounds,
+          noGpsClause("gpsCoordinates.lat", "gpsCoordinates.lng"),
+        ],
+      });
+      useGeo = true;
+    } else {
+      useGeo = applyGeoBounds(
+        query,
+        lat,
+        lng,
+        filterByRadius ? radius : 0,
+        "gpsCoordinates.lat",
+        "gpsCoordinates.lng"
+      );
+    }
 
     const profiles = await PosterBoyProfile.find(query);
     const userIds = [...new Set(profiles.map((p) => String(p.user)))];
@@ -887,16 +963,30 @@ exports.getPublicPosterBoys = async (req, res) => {
       .filter((p) => userMap.has(String(p.user)))
       .map((p) => {
         const user = userMap.get(String(p.user));
-        const hasPoint = p.gpsCoordinates?.lat && p.gpsCoordinates?.lng;
+        const gLat = Number(p.gpsCoordinates?.lat);
+        const gLng = Number(p.gpsCoordinates?.lng);
+        const hasPoint = Number.isFinite(gLat) && Number.isFinite(gLng);
         const distance =
-          useGeo && hasPoint ? distanceKm(lat, lng, p.gpsCoordinates.lat, p.gpsCoordinates.lng) : undefined;
+          hasCoords && hasPoint ? distanceKm(lat, lng, gLat, gLng) : undefined;
         return toPublicPosterBoy(p, user, distance);
       });
 
+    const byDistance = (a, b) => {
+      if (a.distance === undefined) return 1;
+      if (b.distance === undefined) return -1;
+      return a.distance - b.distance;
+    };
+
     if (useGeo) {
       items = items
-        .filter((i) => i.distance !== undefined && i.distance <= radius)
-        .sort((a, b) => a.distance - b.distance);
+        .filter((i) => {
+          if (i.distance !== undefined) return i.distance <= radius;
+          if (locTokens.length === 0) return false;
+          return matchesLocationText(i.city, i.address, locTokens);
+        })
+        .sort(byDistance);
+    } else if (hasCoords) {
+      items.sort(byDistance);
     } else {
       items.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
     }

@@ -206,12 +206,19 @@ function SearchContent() {
       params.search = keyword.trim();
     }
     if (location.trim()) params.city = location.trim();
+    // Same geo contract as businesses: always send coords for distance,
+    // radius only filters when > 0 (default 5 km).
+    if (searchCoords) {
+      params.lat = searchCoords.lat;
+      params.lng = searchCoords.lng;
+      if (Number(radiusApplied) > 0) params.radius = Number(radiusApplied);
+    }
     getPublicPosterBoys(params)
       .then(res => { if (!cancelled) setPosterBoys(res?.data?.posterBoys || []); })
       .catch(() => { if (!cancelled) setPosterBoys([]); })
       .finally(() => { if (!cancelled) setPbLoading(false); });
     return () => { cancelled = true; };
-  }, [showPosterBoys, matchesStaffingName, staffingSelected, staffingCategory, keyword, location]);
+  }, [showPosterBoys, matchesStaffingName, staffingSelected, staffingCategory, keyword, location, searchCoords, radiusApplied]);
 
   // Reverse-geocode the location string to lat/lng once, and remember which
   // location string has settled. The business search waits on this so it runs
@@ -256,12 +263,11 @@ function SearchContent() {
   const filtersRef = useRef({});
   filtersRef.current = { keyword, location, filterCategory, filterService, filterOrder, filterDeal, filterLimit, filterRating, filterOptions, allCategories, staffingCategory, radiusApplied, searchCoords };
 
-  // Only refetch when the geo parameters actually change (radius off → the
-  // reverse geocode finishing must not restart the search or flicker results).
-  const geoKey =
-    radiusApplied > 0 && searchCoords
-      ? `${searchCoords.lat},${searchCoords.lng},${radiusApplied}`
-      : '';
+  // Refetch when coords or radius change. Coords are always part of the key
+  // (even with radius Off) so distance still resolves without flicker.
+  const geoKey = searchCoords
+    ? `${searchCoords.lat},${searchCoords.lng},${radiusApplied}`
+    : `no-geo-${radiusApplied}`;
   // True once the reverse-geocode for the current location has settled (or
   // there is no location to geocode). The business search waits on this so
   // it fires once with the final coords instead of once without radius and
@@ -313,10 +319,12 @@ function SearchContent() {
       if (f.filterRating !== 'Any rating') {
         params.minRating = f.filterRating === '4 Stars & up' ? 4 : 3;
       }
-      if (f.searchCoords && Number(f.radiusApplied) > 0) {
+      if (f.searchCoords) {
         params.lat = f.searchCoords.lat;
         params.lng = f.searchCoords.lng;
-        params.radius = Number(f.radiusApplied);
+        // Radius filters by distance (default 5 km). 0 ("Off") still sends
+        // coords so the backend returns "X km away" sorted nearest-first.
+        params.radius = Number(f.radiusApplied) || 0;
       }
 
       Object.keys(params).forEach(key => {
