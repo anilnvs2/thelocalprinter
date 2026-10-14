@@ -79,8 +79,12 @@ function SearchContent() {
   const searchParams = useSearchParams();
   const containerRef = useRef(null);
 
-  const [keyword, setKeyword] = useState(searchParams.get('q') || '');
-  const [location, setLocation] = useState(searchParams.get('location') || '');
+  // Lazy-init from the URL (and saved location) so the very first effect pass
+  // already has the final keyword/location. This component only mounts on the
+  // client (useSearchParams inside Suspense), so reading localStorage here is
+  // safe and avoids a second fetch when the mount effect syncs the state.
+  const [keyword, setKeyword] = useState(() => searchParams.get('q') || '');
+  const [location, setLocation] = useState(() => searchParams.get('location') || getSavedCity());
 
   useEffect(() => {
     // No explicit location in the URL (footer links, direct open) → fall back
@@ -120,6 +124,10 @@ function SearchContent() {
   const [allCategories, setAllCategories] = useState([]);
   const [posterBoys, setPosterBoys] = useState([]);
   const [pbLoading, setPbLoading] = useState(false);
+  // Staffing detection is async — don't render the businesses empty state until
+  // we know whether this query also lists poster boys (otherwise "0 results"
+  // flashes for a beat before the staffing category loads).
+  const [catsReady, setCatsReady] = useState(false);
 
   const [theme, setTheme] = useState('light');
 
@@ -158,7 +166,8 @@ function SearchContent() {
         setAllCategories(cats);
         setStaffingCategory(cats.find(c => c.kind === 'staffing') || null);
       })
-      .catch(() => setStaffingCategory(null));
+      .catch(() => setStaffingCategory(null))
+      .finally(() => setCatsReady(true));
   }, []);
 
   const query = keyword.trim().toLowerCase();
@@ -204,10 +213,17 @@ function SearchContent() {
     return () => { cancelled = true; };
   }, [showPosterBoys, matchesStaffingName, staffingSelected, staffingCategory, keyword, location]);
 
+  // Reverse-geocode the location string to lat/lng once, and remember which
+  // location string has settled. The business search waits on this so it runs
+  // exactly once with the final coords instead of firing without radius and
+  // again when the geocode resolves.
+  const [geoSettledFor, setGeoSettledFor] = useState('');
+
   useEffect(() => {
     const loc = (location || '').trim();
     if (!loc) {
       setSearchCoords(null);
+      setGeoSettledFor('');
       return undefined;
     }
     let cancelled = false;
@@ -220,8 +236,13 @@ function SearchContent() {
           Number.isFinite(Number(l.lat)) && Number.isFinite(Number(l.lon))
         );
         setSearchCoords(match ? { lat: Number(match.lat), lng: Number(match.lon) } : null);
+        setGeoSettledFor(loc);
       })
-      .catch(() => { if (!cancelled) setSearchCoords(null); });
+      .catch(() => {
+        if (cancelled) return;
+        setSearchCoords(null);
+        setGeoSettledFor(loc);
+      });
     return () => { cancelled = true; };
   }, [location]);
 
@@ -241,8 +262,18 @@ function SearchContent() {
     radiusApplied > 0 && searchCoords
       ? `${searchCoords.lat},${searchCoords.lng},${radiusApplied}`
       : '';
+  // True once the reverse-geocode for the current location has settled (or
+  // there is no location to geocode). The business search waits on this so
+  // it fires once with the final coords instead of once without radius and
+  // again when the geocode resolves.
+  const geoReady = (location || '').trim() === geoSettledFor;
+
+  // Monotonic sequence so a slow, stale response can never overwrite the
+  // results of a newer search (rapid filter changes, location switch, etc.).
+  const fetchSeqRef = useRef(0);
 
   const doFetch = useCallback(async (page = 1) => {
+    const seq = ++fetchSeqRef.current;
     const f = filtersRef.current;
     // Staffing ("Poster Boy") is not a business category — its people are
     // listed by the poster-boy section, so skip the business query entirely.
@@ -293,22 +324,30 @@ function SearchContent() {
       });
 
       const res = await searchPublicBusinesses(params);
+      if (seq !== fetchSeqRef.current) return; // superseded by a newer search
       if (res?.data) {
         setBusinesses(res.data.businesses || []);
         setPagination(res.data.pagination || { page: 1, limit: 12, total: 0, pages: 0 });
       }
     } catch (err) {
+      if (seq !== fetchSeqRef.current) return;
       console.error('Search failed:', err);
       setBusinesses([]);
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    if (!geoReady) {
+      // New location chosen — coords not settled yet. Show the spinner
+      // instead of stale results from the previous location.
+      setLoading(true);
+      return;
+    }
     doFetch(1);
     setCurrentPage(1);
-  }, [keyword, location, filterCategory, filterService, filterOrder, filterDeal, filterLimit, filterRating, filterOptions, geoKey, doFetch]);
+  }, [keyword, location, filterCategory, filterService, filterOrder, filterDeal, filterLimit, filterRating, geoReady, geoKey, doFetch]);
 
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
@@ -356,6 +395,12 @@ function SearchContent() {
     radiusApplied > 0 &&
     nextRadiusOption !== null &&
     !(showPosterBoys && posterBoys.length > 0);
+
+  // The page renders atomically: "Searching..." until the business search,
+  // staffing-category detection, and (when applicable) the poster-boy search
+  // have ALL settled. This prevents the empty state / "0 results" from
+  // flashing before the poster-boy results arrive.
+  const searchPending = loading || !catsReady || (showPosterBoys && pbLoading);
 
   const isDark = theme === 'dark';
 
@@ -459,14 +504,16 @@ function SearchContent() {
             style={{ borderColor: isDark ? '#374151' : '#e5e7eb' }}>
             <div className="flex flex-col">
               <h2 className={`text-[20px] md:text-[24px] font-extrabold transition-colors ${isDark ? 'text-gray-100' : 'text-brand-navy'}`}>
-                {loading || (staffingSelected && pbLoading)
+                {searchPending
                   ? 'Searching...'
                   : (() => {
-                      const total = staffingSelected ? posterBoys.length : pagination.total;
+                      const total = showPosterBoys
+                        ? posterBoys.length + pagination.total
+                        : pagination.total;
                       return `${total} result${total !== 1 ? 's' : ''} found`;
                     })()}
               </h2>
-              {hasActiveFilters && !loading && (
+              {hasActiveFilters && !searchPending && (
                 <p className={`text-[14px] font-medium mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                   {location.trim() ? `in ${location.trim()}` : 'Filtered results'}
                 </p>
@@ -474,7 +521,7 @@ function SearchContent() {
             </div>
           </div>
 
-          {showPosterBoys && !loading && (
+          {showPosterBoys && !searchPending && (
             <section className="mb-10">
               <div className="flex items-center gap-3 mb-5">
                 <div className="w-1 h-6 rounded-full bg-brand-orange" />
@@ -482,7 +529,7 @@ function SearchContent() {
                   Poster Boys
                 </h3>
                 <span className={`text-[13px] font-medium px-2.5 py-0.5 rounded-full ${isDark ? 'bg-gray-800 text-gray-400' : 'bg-brand-orange/10 text-brand-orange'}`}>
-                  {pbLoading ? '...' : posterBoys.length}
+                  {posterBoys.length}
                 </span>
                 {location.trim() && (
                   <span className={`text-[12px] font-semibold px-2.5 py-0.5 rounded-full ${isDark ? 'bg-gray-800 text-gray-300' : 'bg-slate-100 text-brand-navy'}`}>
@@ -508,7 +555,7 @@ function SearchContent() {
             </section>
           )}
 
-          {loading ? (
+          {searchPending ? (
             <div className="flex flex-col items-center justify-center py-20">
               <Loader2 className={`w-10 h-10 animate-spin mb-4 ${isDark ? 'text-brand-orange' : 'text-brand-orange'}`} />
               <p className={`text-[16px] font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Searching for businesses...</p>
