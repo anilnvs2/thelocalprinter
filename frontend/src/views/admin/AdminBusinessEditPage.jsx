@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   Plus,
   Trash2,
+  Navigation,
 } from "lucide-react";
 import { getAdminBusinessById, adminUpdateBusiness } from "../../services/adminService";
 import api from "../../services/api";
@@ -149,6 +150,8 @@ const emptyForm = {
   category: "",
   categoryId: null,
   serviceIds: [],
+  // Admin-only extra categories: [{ categoryId, serviceIds }] (ids).
+  additionalCategories: [],
   tags: [],
   address: "",
   city: "",
@@ -307,6 +310,8 @@ const AdminBusinessEditPage = () => {
   const [uploadErrors, setUploadErrors] = useState({});
   const [customServices, setCustomServices] = useState([]);
   const [newCustomService, setNewCustomService] = useState("");
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState("");
 
   const machineryVideoRef = useRef(null);
   const outletVideoRef = useRef(null);
@@ -360,6 +365,14 @@ const AdminBusinessEditPage = () => {
           contactEmail: b.contactEmail || "", website: b.website || "",
           category: b.category || "", categoryId: b.categoryId?._id || b.categoryId || null,
           serviceIds: b.serviceIds ? b.serviceIds.map((s) => s._id || s) : [],
+          // Populate gives { categoryId: {_id,...}, serviceIds: [{_id,...}] } —
+          // normalize to plain ids for the form.
+          additionalCategories: (Array.isArray(b.additionalCategories) ? b.additionalCategories : [])
+            .map((entry) => ({
+              categoryId: entry?.categoryId?._id || entry?.categoryId || null,
+              serviceIds: (Array.isArray(entry?.serviceIds) ? entry.serviceIds : []).map((s) => s?._id || s),
+            }))
+            .filter((entry) => entry.categoryId),
           tags: b.tags || [], address: b.address || "", city: b.city || "",
           gpsCoordinates: b.gpsCoordinates || { lat: "", lng: "" },
           googleBusinessProfileLink: b.googleBusinessProfileLink || "",
@@ -419,6 +432,101 @@ const AdminBusinessEditPage = () => {
     setHasChanges(true);
     setSaveSuccess(false);
   }, []);
+
+  // ─── Admin-only multi-category helpers ───
+  const addAdditionalCategory = (categoryId) => {
+    if (!categoryId) return;
+    if (form.categoryId === categoryId) return; // primary already covers it
+    if (form.additionalCategories.some((e) => e.categoryId === categoryId)) return;
+    updateField("additionalCategories", [...form.additionalCategories, { categoryId, serviceIds: [] }]);
+  };
+
+  const removeAdditionalCategory = (categoryId) => {
+    updateField("additionalCategories", form.additionalCategories.filter((e) => e.categoryId !== categoryId));
+  };
+
+  const toggleAdditionalService = (categoryId, serviceId) => {
+    updateField(
+      "additionalCategories",
+      form.additionalCategories.map((entry) => {
+        if (entry.categoryId !== categoryId) return entry;
+        const current = entry.serviceIds || [];
+        return {
+          ...entry,
+          serviceIds: current.includes(serviceId)
+            ? current.filter((id) => id !== serviceId)
+            : [...current, serviceId],
+        };
+      })
+    );
+  };
+
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) { setGeoError("Geolocation is not supported by your browser."); return; }
+    setGeoLoading(true);
+    setGeoError("");
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const accuracy = pos.coords.accuracy;
+
+        updateNested("gpsCoordinates", "lat", lat.toFixed(6));
+        updateNested("gpsCoordinates", "lng", lng.toFixed(6));
+
+        if (accuracy && accuracy > 1000) {
+          setGeoError("Location accuracy is low. Please try again outdoors or enable precise location.");
+        }
+
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+            { headers: { "Accept-Language": "en" } }
+          );
+          if (!res.ok) throw new Error(`Reverse geocoding failed: ${res.status}`);
+          const data = await res.json();
+          const addr = data.address || {};
+
+          const streetParts = [];
+          if (addr.house_number && addr.road) streetParts.push(`${addr.road}, ${addr.house_number}`);
+          else if (addr.road) streetParts.push(addr.road);
+          else if (addr.pedestrian) streetParts.push(addr.pedestrian);
+          else if (addr.footway) streetParts.push(addr.footway);
+
+          const locality = addr.neighbourhood || addr.suburb || addr.quarter || "";
+          const area = addr.village || addr.town || addr.city || addr.city_district || addr.county || "";
+          const state = addr.state || "";
+          const postcode = addr.postcode || "";
+          const country = addr.country || "";
+
+          const fullAddress = [...streetParts, locality, area, postcode, state, country]
+            .filter(Boolean)
+            .join(", ");
+          updateField("address", fullAddress || data.display_name || "");
+
+          const city = addr.city || addr.town || addr.village || addr.city_district || addr.county || "";
+          updateField("city", city);
+        } catch (e) {
+          console.warn("Reverse geocoding failed:", e);
+        }
+        setGeoLoading(false);
+      },
+      (err) => {
+        setGeoLoading(false);
+        console.error("Geolocation error:", err.code, err.message);
+        if (err.code === 1) {
+          setGeoError("Location permission was denied. Please allow location access or enter your location manually.");
+        } else if (err.code === 2) {
+          setGeoError("Location information is unavailable. Please enter your location manually.");
+        } else if (err.code === 3) {
+          setGeoError("Location request timed out. Please try again or enter your location manually.");
+        } else {
+          setGeoError("Unable to detect your current location. Please enter your location manually.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  };
 
   const handleFileUpload = useCallback(async (file, fieldKey, folder, resourceType) => {
     setUploadErrors((prev) => ({ ...prev, [fieldKey]: "" }));
@@ -640,6 +748,10 @@ const AdminBusinessEditPage = () => {
                 updateField("categoryId", val || null);
                 updateField("category", cat ? cat.name : "");
                 updateField("serviceIds", []);
+                // The new primary must not also live in the additional list.
+                if (val) {
+                  updateField("additionalCategories", form.additionalCategories.filter((e) => e.categoryId !== val));
+                }
               }}>
                 <SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger>
                 <SelectContent>
@@ -708,6 +820,77 @@ const AdminBusinessEditPage = () => {
                 </FormField>
               );
             })()}
+            {/* Admin-only: list this business under more categories too. */}
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label className="text-sm font-medium text-foreground">Additional Categories</Label>
+                <Select value="" onValueChange={addAdditionalCategory}>
+                  <SelectTrigger className="h-9 w-full sm:w-[240px]">
+                    <SelectValue placeholder="Add a category..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories
+                      .filter((cat) => cat._id !== form.categoryId && !form.additionalCategories.some((e) => e.categoryId === cat._id))
+                      .map((cat) => (
+                        <SelectItem key={cat._id} value={cat._id}>{cat.name}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.additionalCategories.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  None yet — the business is listed only under its primary category.
+                </p>
+              ) : (
+                form.additionalCategories.map((entry) => {
+                  const cat = categories.find((c) => c._id === entry.categoryId);
+                  const services = cat?.services || [];
+                  return (
+                    <div key={entry.categoryId} className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-foreground">{cat?.name || "Unknown category"}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          title="Remove category"
+                          onClick={() => removeAdditionalCategory(entry.categoryId)}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
+                      {services.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {services.map((service) => {
+                            const serviceId = service.id || service._id;
+                            const isChecked = (entry.serviceIds || []).includes(serviceId);
+                            return (
+                              <label
+                                key={serviceId}
+                                className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer transition-colors ${
+                                  isChecked ? "border-primary bg-primary/5" : "border-input hover:bg-muted/50"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="rounded border-gray-300"
+                                  checked={isChecked}
+                                  onChange={() => toggleAdditionalService(entry.categoryId, serviceId)}
+                                />
+                                <span className="text-sm">{service.name}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">No services available for this category.</p>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
             <FormField label="Tags" hint="Press Enter to add a tag">
               <TagInput tags={form.tags} onChange={(val) => updateField("tags", val)} placeholder="e.g. banner, visiting card, brochure" />
             </FormField>
@@ -725,6 +908,16 @@ const AdminBusinessEditPage = () => {
                 <Input type="number" step="any" value={form.gpsCoordinates.lng} onChange={(e) => updateNested("gpsCoordinates", "lng", e.target.value)} placeholder="e.g. 72.8777" />
               </FormField>
             </div>
+            <Button type="button" variant="outline" size="sm" onClick={handleGetCurrentLocation} disabled={geoLoading} className="gap-2">
+              {geoLoading ? <Loader2 size={14} className="animate-spin" /> : <Navigation size={14} />}
+              {geoLoading ? "Detecting location..." : "Use My Current Location"}
+            </Button>
+            {geoError && (
+              <div className="flex items-start gap-2 p-2.5 rounded-lg bg-destructive/10 text-destructive text-xs">
+                <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                <span>{geoError}</span>
+              </div>
+            )}
             <FormField label="Google Business Profile Link" hint="Internal use only - not publicly displayed">
               <Input value={form.googleBusinessProfileLink} onChange={(e) => updateField("googleBusinessProfileLink", e.target.value)} placeholder="https://goo.gl/maps/..." />
             </FormField>

@@ -422,6 +422,13 @@ const UserBusinessDetails = ({ publicMode = false }) => {
   const wh = business.workingHours;
   const hasStructuredHours = wh && typeof wh === "object" && !!wh.monday;
   const serviceList = Array.isArray(business.serviceIds) ? business.serviceIds : [];
+  // Extra categories an admin attached (each with its own services).
+  const additionalCats = Array.isArray(business.additionalCategories) ? business.additionalCategories : [];
+  // Primary + additional services, de-duplicated by id.
+  const allServiceList = [
+    ...serviceList,
+    ...additionalCats.flatMap((e) => (Array.isArray(e.serviceIds) ? e.serviceIds : [])),
+  ].filter((s, i, arr) => arr.findIndex((x) => (x?._id || x) === (s?._id || s)) === i);
   const socials = [
     { key: "facebook", label: "Facebook", url: business.socialMedia?.facebook?.trim(), cls: "text-[#1877F2] border-[#1877F2]/30 hover:bg-[#1877F2]/5" },
     { key: "instagram", label: "Instagram", url: business.socialMedia?.instagram?.trim(), cls: "text-[#E1306C] border-[#E1306C]/30 hover:bg-[#E1306C]/5" },
@@ -449,7 +456,7 @@ const UserBusinessDetails = ({ publicMode = false }) => {
   const callDigits = String(business.whatsapp || business.phone || "").replace(/\D/g, "");
   const hasContact = business.contactName || business.phone || business.whatsapp || business.contactEmail || business.website;
   const hasCapabilities =
-    business.category || serviceList.length > 0 || business.serviceType ||
+    business.category || allServiceList.length > 0 || business.serviceType ||
     (business.addonServices?.length || 0) > 0 || (business.tags?.length || 0) > 0;
   const hasOrderInfo = business.orderLimits || business.customerType || business.orderingMethod;
   const hasPolicies =
@@ -551,6 +558,13 @@ const UserBusinessDetails = ({ publicMode = false }) => {
                     <Badge variant="secondary">{business.category}</Badge>
                   </span>
                 )}
+                {additionalCats
+                  .filter((entry) => entry.categoryId?.name)
+                  .map((entry) => (
+                    <Badge key={entry.categoryId._id} variant="secondary">
+                      {entry.categoryId.name}
+                    </Badge>
+                  ))}
                 {reviewSummary.reviewCount > 0 && (
                   <span className="inline-flex items-center gap-1 text-xs font-semibold text-foreground">
                     <Star size={13} className="fill-amber-400 text-amber-400" />
@@ -668,11 +682,17 @@ const UserBusinessDetails = ({ publicMode = false }) => {
         {hasCapabilities && (
           <ProfileSection title="Services & Capabilities" icon={Wrench}>
             <div className="space-y-3">
-              {(business.categoryId?.name || business.category) && (
-                <Field label="Category" value={business.categoryId?.name || business.category} />
+              {(business.categoryId?.name || business.category || additionalCats.length > 0) && (
+                <Field
+                  label="Category"
+                  value={[
+                    business.categoryId?.name || business.category,
+                    ...additionalCats.map((e) => e.categoryId?.name).filter(Boolean),
+                  ].filter(Boolean).join(", ")}
+                />
               )}
-              {serviceList.length > 0 && (
-                <ArrayField label="Services" value={serviceList.map((s) => s.name || s)} />
+              {allServiceList.length > 0 && (
+                <ArrayField label="Services" value={allServiceList.map((s) => s.name || s)} />
               )}
               {business.serviceType && (
                 <Field label="Service Type" value={ENUM_LABELS.serviceType[business.serviceType] || business.serviceType} />

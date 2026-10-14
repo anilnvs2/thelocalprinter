@@ -451,6 +451,9 @@ const VendorBusinessForm = () => {
   const [locationUsed, setLocationUsed] = useState(false);
   // The 9 core categories are hardcoded so they show even if the API/DB is down.
   const [categories, setCategories] = useState(() => mergeCategories([]));
+  // Extra categories the ADMIN attached to this business — display-only for
+  // the vendor (they cannot edit them; the backend ignores these on save).
+  const [adminCategories, setAdminCategories] = useState([]);
 
   const [useUrlMode, setUseUrlMode] = useState(false);
   const [uploading, setUploading] = useState({});
@@ -545,6 +548,20 @@ const VendorBusinessForm = () => {
           // The business already has a stored location, so requiring a fresh
           // geolocation fix would block every edit save.
           setLocationUsed(true);
+          // Admin-assigned extra categories — display-only, never sent on save.
+          setAdminCategories(
+            Array.isArray(b.additionalCategories)
+              ? b.additionalCategories
+                  .filter((entry) => entry && entry.categoryId)
+                  .map((entry) => ({
+                    categoryId: entry.categoryId._id || entry.categoryId,
+                    name: entry.categoryId.name || "",
+                    services: Array.isArray(entry.serviceIds)
+                      ? entry.serviceIds.map((s) => s.name || s)
+                      : [],
+                  }))
+              : []
+          );
         } catch (err) {
           setSubmitError(err.response?.data?.message || "Failed to load business");
         } finally {
@@ -1151,6 +1168,24 @@ const VendorBusinessForm = () => {
                 </FormField>
               );
             })()}
+            {/* Extra categories assigned by admin — view-only for the vendor. */}
+            {adminCategories.length > 0 && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <p className="text-xs font-medium text-muted-foreground mb-2">
+                  Additional Categories (set by admin — contact admin to change)
+                </p>
+                <div className="space-y-2">
+                  {adminCategories.map((entry) => (
+                    <div key={entry.categoryId} className="text-sm">
+                      <span className="font-medium">{entry.name}</span>
+                      {entry.services.length > 0 && (
+                        <span className="text-muted-foreground"> — {entry.services.join(", ")}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <FormField label="Address" required error={errors.address}>
               <Input value={form.address} onChange={(e) => updateField("address", e.target.value)} placeholder="e.g. 123 Main Street, Andheri West" />
             </FormField>

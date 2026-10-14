@@ -483,7 +483,9 @@ exports.getBusinessById = async (req, res) => {
       .select("+googleBusinessProfileLink +gstNumber +fraudReport")
       .populate("vendor", "fullName email phone role publicId")
       .populate("categoryId", "name image")
-      .populate("serviceIds", "name");
+      .populate("serviceIds", "name")
+      .populate("additionalCategories.categoryId", "name image")
+      .populate("additionalCategories.serviceIds", "name");
 
     // If not found, try as a User ID → find their business
     if (!business) {
@@ -492,7 +494,9 @@ exports.getBusinessById = async (req, res) => {
         business = await Business.findOne({ vendor: user._id })
           .select("+googleBusinessProfileLink +gstNumber +fraudReport")
           .populate("categoryId", "name image")
-          .populate("serviceIds", "name");
+          .populate("serviceIds", "name")
+          .populate("additionalCategories.categoryId", "name image")
+          .populate("additionalCategories.serviceIds", "name");
 
         if (business) {
           // Attach the vendor user data manually since we looked up by user ID
@@ -569,6 +573,18 @@ exports.adminUpdateBusiness = async (req, res) => {
     if (data.category !== undefined) business.category = data.category;
     if (data.categoryId !== undefined) business.categoryId = data.categoryId;
     if (data.serviceIds !== undefined) business.serviceIds = data.serviceIds;
+    // Admin-only multi-category support: each entry pairs a category with the
+    // services selected under it. Entries without a categoryId are dropped.
+    if (data.additionalCategories !== undefined) {
+      business.additionalCategories = (Array.isArray(data.additionalCategories) ? data.additionalCategories : [])
+        .map((entry) => ({
+          categoryId: entry?.categoryId || null,
+          serviceIds: Array.isArray(entry?.serviceIds)
+            ? entry.serviceIds.filter((s) => s)
+            : [],
+        }))
+        .filter((entry) => entry.categoryId);
+    }
     if (data.tags !== undefined) business.tags = data.tags;
     if (data.address !== undefined) business.address = data.address;
     if (data.city !== undefined) business.city = data.city;

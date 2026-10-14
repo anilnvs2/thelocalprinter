@@ -247,6 +247,19 @@ const VendorBusinesses = () => {
                                 ))}
                               </div>
                             )}
+                            {/* Extra categories assigned by admin — shown read-only. */}
+                            {Array.isArray(b.additionalCategories) && b.additionalCategories.length > 0 && (
+                              <div className="mt-2 space-y-1">
+                                {b.additionalCategories.map((entry) => (
+                                  <div key={entry.categoryId?._id || entry.categoryId} className="text-[11px]">
+                                    <span className="font-medium text-foreground">{entry.categoryId?.name || ""}</span>
+                                    {Array.isArray(entry.serviceIds) && entry.serviceIds.length > 0 && (
+                                      <span className="text-muted-foreground"> — {entry.serviceIds.map((s) => s.name || s).join(", ")}</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </TableCell>

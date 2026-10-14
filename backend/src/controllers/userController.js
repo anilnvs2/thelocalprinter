@@ -93,6 +93,8 @@ exports.getPublicBusinesses = async (req, res) => {
         const catIds = matchedCats.map((c) => c._id);
         orConditions.push({ categoryId: { $in: catIds } });
         orConditions.push({ serviceIds: { $in: catIds } });
+        orConditions.push({ "additionalCategories.categoryId": { $in: catIds } });
+        orConditions.push({ "additionalCategories.serviceIds": { $in: catIds } });
       }
       if (/^VND-/i.test(search)) {
         const vendor = await User.findOne({ publicId: { $regex: safeSearch, $options: "i" } }).select("_id");
@@ -101,9 +103,23 @@ exports.getPublicBusinesses = async (req, res) => {
       query.$or = orConditions;
     }
     if (serviceId) {
-      query.serviceIds = { $in: [serviceId] };
+      // A business can list services under its primary category OR any
+      // admin-attached additional category — match either.
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { serviceIds: { $in: [serviceId] } },
+          { "additionalCategories.serviceIds": { $in: [serviceId] } },
+        ],
+      });
     } else if (categoryId) {
-      query.categoryId = categoryId;
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { categoryId: categoryId },
+          { "additionalCategories.categoryId": categoryId },
+        ],
+      });
     } else if (category) {
       query.category = { $regex: category, $options: "i" };
     }
@@ -251,6 +267,8 @@ exports.getBusinessById = async (req, res) => {
     const business = await Business.findOne({ _id: id, status: "approved", isActive: true })
       .populate("categoryId", "name slug image")
       .populate("serviceIds", "name slug")
+      .populate("additionalCategories.categoryId", "name slug image")
+      .populate("additionalCategories.serviceIds", "name slug")
       .populate("vendor", "publicId fullName")
       .select(
         "-googleBusinessProfileLink -gstNumber -fraudReport"

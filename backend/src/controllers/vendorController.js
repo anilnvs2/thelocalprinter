@@ -66,7 +66,9 @@ exports.getDashboard = async (req, res) => {
           .limit(5)
           .populate("categoryId", "name image")
           .populate("serviceIds", "name")
-          .select("name category categoryId serviceIds city status isActive createdAt"),
+          .populate("additionalCategories.categoryId", "name image")
+          .populate("additionalCategories.serviceIds", "name")
+          .select("name category categoryId serviceIds additionalCategories city status isActive createdAt"),
       ]);
 
     const vendorBusinessIds = await Business.find({ vendor: vendorId }).distinct("_id");
@@ -147,7 +149,9 @@ exports.getMyBusinesses = async (req, res) => {
         .limit(limit)
         .populate("categoryId", "name image")
         .populate("serviceIds", "name")
-        .select("name description category categoryId serviceIds phone address city status isActive pendingChange createdAt"),
+        .populate("additionalCategories.categoryId", "name image")
+        .populate("additionalCategories.serviceIds", "name")
+        .select("name description category categoryId serviceIds additionalCategories phone address city status isActive pendingChange createdAt"),
       Business.countDocuments(query),
     ]);
 
@@ -195,7 +199,9 @@ exports.getBusinessById = async (req, res) => {
     const business = await Business.findById(id)
       .select("+googleBusinessProfileLink +gstNumber +fraudReport")
       .populate("categoryId", "name image")
-      .populate("serviceIds", "name");
+      .populate("serviceIds", "name")
+      .populate("additionalCategories.categoryId", "name image")
+      .populate("additionalCategories.serviceIds", "name");
 
     if (!business) {
       return res.status(404).json({

@@ -100,6 +100,20 @@ const businessSchema = new mongoose.Schema(
       ref: "Category",
       default: [],
     },
+    // Extra categories an admin can attach on top of the primary one (admin
+    // edit only — vendors always manage a single primary category). Each
+    // entry pairs a category with the services picked under it so public
+    // search/filter can match the business under ANY of its categories.
+    additionalCategories: {
+      type: [
+        {
+          categoryId: { type: mongoose.Schema.Types.ObjectId, ref: "Category", default: null },
+          serviceIds: { type: [mongoose.Schema.Types.ObjectId], ref: "Category", default: [] },
+          _id: false,
+        },
+      ],
+      default: [],
+    },
     tags: {
       type: [String],
       default: [],
@@ -309,6 +323,7 @@ businessSchema.index({ status: 1 });
 businessSchema.index({ createdAt: -1 });
 businessSchema.index({ category: 1 });
 businessSchema.index({ categoryId: 1 });
+businessSchema.index({ "additionalCategories.categoryId": 1 });
 businessSchema.index({ city: 1 });
 businessSchema.index({ "pendingChange.type": 1 });
 
