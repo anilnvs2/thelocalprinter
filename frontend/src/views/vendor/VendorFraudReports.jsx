@@ -8,8 +8,11 @@ import {
   ShieldCheck,
   Phone,
   User,
+  Plus,
+  Loader2,
+  CheckCircle,
 } from "lucide-react";
-import { getFraudReports } from "../../services/vendorService";
+import { getFraudReports, addFraudReport } from "../../services/vendorService";
 import { PageHeader } from "../../components/shared/page-header";
 import { EmptyState } from "../../components/shared/empty-state";
 import { PageLoader } from "../../components/shared/page-loader";
@@ -18,6 +21,15 @@ import { Card, CardContent } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
+import { Label } from "../../components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -38,6 +50,13 @@ const VendorFraudReports = () => {
   const [searchMeta, setSearchMeta] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Vendor self-submission dialog.
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState({ contactName: "", designation: "", contactNumber: "" });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saveSuccess, setSaveSuccess] = useState("");
 
   // Debounce the raw input so the API is hit once the vendor pauses typing.
   useEffect(() => {
@@ -90,11 +109,50 @@ const VendorFraudReports = () => {
 
   const clearSearch = () => setSearchInput("");
 
+  const openAdd = () => {
+    setForm({ contactName: "", designation: "", contactNumber: "" });
+    setSaveError("");
+    setSaveSuccess("");
+    setAddOpen(true);
+  };
+
+  const setField = (field, value) => setForm((p) => ({ ...p, [field]: value }));
+
+  const handleAdd = async () => {
+    const entry = {
+      contactName: form.contactName.trim(),
+      designation: form.designation.trim(),
+      contactNumber: form.contactNumber.trim(),
+    };
+    if (!entry.contactName && !entry.designation && !entry.contactNumber) {
+      setSaveError("Provide at least a contact name, designation or number");
+      return;
+    }
+    setSaving(true);
+    setSaveError("");
+    try {
+      const res = await addFraudReport(entry);
+      setSaveSuccess(res.message || "Fraud report added to the shared hotlist");
+      // Refresh the list so the new row shows immediately.
+      fetchReports();
+      setTimeout(() => setAddOpen(false), 1200);
+    } catch (err) {
+      setSaveError(err.response?.data?.message || "Failed to add fraud report");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <PageHeader
         title="Fraud / Hotlist Report"
         description="Search the shared hotlist of reported contacts before dealing with a new client or supplier."
+        actions={
+          <Button onClick={openAdd} className="gap-2">
+            <Plus size={16} /> Add Report
+          </Button>
+        }
       />
 
       <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 text-amber-600 text-sm">
@@ -224,6 +282,80 @@ const VendorFraudReports = () => {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={addOpen} onOpenChange={(open) => !saving && setAddOpen(open)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Fraud Report</DialogTitle>
+            <DialogDescription>
+              Report a contact to the shared hotlist. It is visible to all vendors and admins immediately.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {saveError && (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <AlertTriangle size={14} className="flex-shrink-0" />
+                <span>{saveError}</span>
+              </div>
+            )}
+            {saveSuccess && (
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400">
+                <CheckCircle size={14} className="flex-shrink-0" />
+                <span>{saveSuccess}</span>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="contactName">Contact Name</Label>
+              <Input
+                id="contactName"
+                value={form.contactName}
+                onChange={(e) => setField("contactName", e.target.value)}
+                placeholder="Name of the person to report"
+                disabled={saving}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="designation">Designation</Label>
+              <Input
+                id="designation"
+                value={form.designation}
+                onChange={(e) => setField("designation", e.target.value)}
+                placeholder="e.g. Manager, Owner"
+                disabled={saving}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="contactNumber">Contact Number</Label>
+              <Input
+                id="contactNumber"
+                value={form.contactNumber}
+                onChange={(e) => setField("contactNumber", e.target.value)}
+                placeholder="e.g. +91 98765 43210"
+                disabled={saving}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={handleAdd} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 size={16} className="animate-spin mr-2" /> Adding...
+                </>
+              ) : (
+                "Add Report"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

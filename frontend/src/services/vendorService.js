@@ -61,3 +61,8 @@ export const getFraudReports = async (params = {}) => {
   const response = await api.get("/vendor/fraud-reports", { params });
   return response.data;
 };
+
+export const addFraudReport = async (payload) => {
+  const response = await api.post("/vendor/fraud-reports", payload);
+  return response.data;
+};

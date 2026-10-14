@@ -13,6 +13,7 @@ const {
   updateProfile,
   getPackage,
   getFraudReports,
+  addFraudReport,
 } = require("../controllers/vendorController");
 const {
   getVendorReviews,
@@ -26,6 +27,8 @@ router.use(authenticateUser);
 // Fraud / Hotlist report list & search — available to vendors and admins only
 // (the public and ordinary users can never reach this dataset).
 router.get("/fraud-reports", authorizeRole("VENDOR", "ADMIN"), getFraudReports);
+// Vendor files a report straight onto the shared hotlist (no admin approval).
+router.post("/fraud-reports", authorizeRole("VENDOR", "ADMIN"), addFraudReport);
 
 router.use(authorizeRole("VENDOR"));
 

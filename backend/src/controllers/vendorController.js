@@ -714,3 +714,56 @@ exports.getFraudReports = async (req, res) => {
     });
   }
 };
+
+// ─── Fraud / Hotlist Report — vendor self-submission ───
+// A vendor files a report against a contact directly from the hotlist screen.
+// The entry is written straight into one of the vendor's own businesses'
+// embedded fraudReport array, so it shows up for every vendor/admin on the
+// next list fetch — there is no admin approval step.
+exports.addFraudReport = async (req, res) => {
+  try {
+    const vendorId = req.user.userId;
+    const { contactName, designation, contactNumber } = req.body || {};
+
+    const entry = {
+      contactName: String(contactName || "").trim(),
+      designation: String(designation || "").trim(),
+      contactNumber: String(contactNumber || "").trim(),
+    };
+    if (!entry.contactName && !entry.designation && !entry.contactNumber) {
+      return res.status(400).json({
+        success: false,
+        message: "Provide at least a contact name, designation or number",
+      });
+    }
+
+    // Reports live on a Business document ("Reported Under" = business name),
+    // so the vendor must own at least one business to file one. fraudReport is
+    // select:false — it MUST be selected or a push would wipe existing rows.
+    const business = await Business.findOne({ vendor: vendorId })
+      .select("+fraudReport")
+      .sort({ createdAt: 1 });
+    if (!business) {
+      return res.status(400).json({
+        success: false,
+        message: "You need at least one business to file a fraud report",
+      });
+    }
+
+    // Write directly (never via updateBusiness) so the report is live
+    // immediately even when the business itself is approved.
+    business.fraudReport = business.fraudReport || [];
+    business.fraudReport.push(entry);
+    await business.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Fraud report added to the shared hotlist",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Server error adding fraud report",
+    });
+  }
+};
