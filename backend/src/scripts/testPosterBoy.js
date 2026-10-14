@@ -60,13 +60,18 @@ const VALID_PROFILE = {
   aadhaarNumber: "453278912345",
   languages: ["Hindi", "English"],
   address: "12 MG Road, Near City Mall, Kolkata, West Bengal 700001",
-  skills: ["Flex & Vinyl pasting", "Flyer distribution boys", "Custom wall painting"],
+  skills: ["Newspaper Inserts", "Distribution Boy", "Custom wall painting"],
   workMedia: [
     { url: "https://res.cloudinary.com/demo/image/upload/sample.jpg", resourceType: "image" },
     { url: "https://res.cloudinary.com/demo/video/upload/dog.mp4", resourceType: "video" },
   ],
   gpsCoordinates: { lat: 22.5726, lng: 88.3639 },
   city: "Kolkata",
+  workRadius: "10 km to 30 km",
+  strength: "Single Person",
+  orderAccepted: ["Small", "Medium"],
+  bookingTimeline: "1 day prior",
+  workTiming: "Day Only",
 };
 
 const cleanup = async () => {
@@ -146,9 +151,9 @@ const run = async () => {
     assert(res.body.data.token, "token issued on signup");
     posterBoyUserId = createdUser && createdUser._id;
 
-    // ─── 2. Pending account: login allowed, profile API blocked ───
+    // ─── 2. Pending account: login + profile form accessible (form-before-approval) ───
     res = await request("POST", "/auth/login", { email: EMAIL, password: PASSWORD });
-    assert(res.status === 200, "pending poster boy CAN log in (must reach pending screen)");
+    assert(res.status === 200, "pending poster boy CAN log in (must reach the form)");
     assert(res.body.data.user.approvalStatus === "pending", "login returns pending status");
     token = res.body.data.token;
 
@@ -157,13 +162,9 @@ const run = async () => {
     assert(res.body.data.user.approvalStatus === "pending", "/auth/me exposes approvalStatus");
 
     res = await request("GET", "/posterboy/profile", null, token);
-    assert(res.status === 403, "profile GET blocked while account pending");
-    assert(res.body.pendingApproval === true, "403 carries pendingApproval flag");
+    assert(res.status === 200, "profile GET allowed while pending (form-before-approval)");
 
-    res = await request("PUT", "/posterboy/profile", VALID_PROFILE, token);
-    assert(res.status === 403, "profile PUT blocked while account pending");
-
-    // ─── 3. Admin account approval ───
+    // ─── 3. Admin login (approval happens AFTER the form is submitted) ───
     res = await request("POST", "/auth/login", {
       email: "admin@localprinter.com",
       password: "admin@123456",
@@ -171,17 +172,6 @@ const run = async () => {
     assert(res.status === 200, "admin login");
     const adminToken = res.body.data.token;
     assert(res.body.data.user.role === "ADMIN", "admin role is ADMIN");
-
-    res = await request(
-      "PATCH",
-      `/admin/users/${posterBoyUserId}/approval-status`,
-      { status: "approved" },
-      adminToken
-    );
-    assert(res.status === 200, "admin can approve a POSTER_BOY account");
-
-    const dbUser = await User.findById(posterBoyUserId);
-    assert(dbUser && dbUser.approvalStatus === "approved", "approvalStatus persisted as approved");
 
     // Regression: approval must still be refused for a plain USER account.
     const plainUser = await User.findOne({ role: "USER" });
@@ -197,13 +187,14 @@ const run = async () => {
       console.log("  SKIP  USER-role approval regression (no USER account found)");
     }
 
-    // ─── 4. Profile: validation negatives ───
+    // ─── 4. Profile: validation negatives (while still pending) ───
     const negatives = [
       [{ ...VALID_PROFILE, aadhaarNumber: "12345678901" }, "aadhaar must be 12 digits"],
       [{ ...VALID_PROFILE, languages: [] }, "languages required"],
       [{ ...VALID_PROFILE, address: "abc" }, "address too short"],
       [{ ...VALID_PROFILE, skills: [] }, "skills required"],
       [{ ...VALID_PROFILE, skills: ["Others"] }, 'literal "Others" rejected'],
+      [{ ...VALID_PROFILE, workTiming: "Whenever" }, "invalid workTiming rejected"],
       [
         {
           ...VALID_PROFILE,
@@ -220,19 +211,20 @@ const run = async () => {
       assert(res.status === 400, `rejects: ${label}`);
     }
 
-    // ─── 5. First save → pending ───
+    // ─── 5. First save while pending → profile submitted for review ───
     res = await request("PUT", "/posterboy/profile", VALID_PROFILE, token);
-    assert(res.status === 200, "first profile save returns 200");
+    assert(res.status === 200, "first profile save returns 200 (allowed while pending)");
     assert(res.body.data.profile.status === "pending", "first save status is pending");
     assert(res.body.data.profile.profileCompleted === true, "profileCompleted set");
     assert(
       res.body.data.profile.skills.length === 3,
       "skills stored (3 selected, deduped)"
     );
+    assert(res.body.data.profile.workTiming === "Day Only", "workTiming stored");
     profileId = res.body.data.profile._id;
 
     res = await request("GET", "/posterboy/profile", null, token);
-    assert(res.status === 200, "profile GET works after account approval");
+    assert(res.status === 200, "profile GET works while pending");
     assert(res.body.data.user.fullName === "Poster Boy Test", "name auto-sourced from User");
     assert(
       res.body.data.user.whatsappNumber === "9876543210",
@@ -241,22 +233,33 @@ const run = async () => {
     assert(res.body.data.profile.hasPendingChange === false, "no pending change yet");
     assert(res.body.data.profile.status === "pending", "profile status pending");
 
-    // ─── 6. Admin approves first profile submission ───
+    // ─── 6. Admin account approval → also approves the submitted profile (one review) ───
     res = await request(
       "PATCH",
-      `/admin/poster-boys/${profileId}/profile-status`,
+      `/admin/users/${posterBoyUserId}/approval-status`,
       { status: "approved" },
       adminToken
     );
-    assert(res.status === 200, "admin approves first profile submission");
-    assert(res.body.data.profile.status === "approved", "profile now approved");
+    assert(res.status === 200, "admin can approve a POSTER_BOY account");
+
+    const dbUser = await User.findById(posterBoyUserId);
+    assert(dbUser && dbUser.approvalStatus === "approved", "approvalStatus persisted as approved");
+
+    const approvedProfile = await PosterBoyProfile.findById(profileId);
+    assert(
+      approvedProfile && approvedProfile.status === "approved",
+      "account approval also approves the submitted profile (one review step)"
+    );
+
+    res = await request("GET", "/posterboy/profile", null, token);
+    assert(res.body.data.profile.status === "approved", "profile GET reports approved after account approval");
     assert(res.body.data.profile.hasPendingChange === false, "no pendingChange after approval");
 
     // ─── 7. Edit after approval → staged, live untouched ───
     const edited = {
       ...VALID_PROFILE,
       address: "45 Park Street, Kolkata, West Bengal 700016",
-      skills: ["Board Fitting boys"],
+      skills: ["Installation Boy"],
     };
     res = await request("PUT", "/posterboy/profile", edited, token);
     assert(res.status === 200, "post-approval edit returns 200");
@@ -335,7 +338,7 @@ const run = async () => {
     const savedProfile = await PosterBoyProfile.findOne({ user: posterBoyUserId });
     assert(savedProfile, "profile document exists");
     assert(String(savedProfile.categoryId) === String(pbParent._id), "profile stores categoryId");
-    // The approved live profile ends up with skills: ["Board Fitting boys"].
+    // The approved live profile ends up with skills: ["Installation Boy"].
     assert(
       Array.isArray(savedProfile.skillIds) && savedProfile.skillIds.length === 1,
       `profile stores skillIds for the live skills (${(savedProfile.skillIds || []).length})`
@@ -362,8 +365,8 @@ const run = async () => {
     assert(res.status === 200 && !!mine, "filter by parent categoryId returns the profile");
 
     // Skill filters: chosen skill matches, unchosen skill does not.
-    const chosenSkill = skillCats.find((c) => c.slug === "board-fitting-boys");
-    const otherSkill = skillCats.find((c) => c.slug === "flyer-inserts");
+    const chosenSkill = skillCats.find((c) => c.slug === "installation-boy");
+    const otherSkill = skillCats.find((c) => c.slug === "pasting-boy");
     assert(!!chosenSkill && !!otherSkill, "skill subcategories resolvable by slug");
 
     res = await request("GET", `/user/public/poster-boys?serviceId=${chosenSkill._id}&limit=50`);
@@ -388,7 +391,7 @@ const run = async () => {
     assert(res.status === 200 && !mine, "city filter excludes other cities");
 
     // Free-text search on skills
-    res = await request("GET", "/user/public/poster-boys?search=Board%20Fitting&limit=50");
+    res = await request("GET", "/user/public/poster-boys?search=Installation&limit=50");
     items = (res.body.data && res.body.data.posterBoys) || [];
     mine = items.find((i) => String(i._id) === String(profileId));
     assert(res.status === 200 && !!mine, "free-text search matches skill names");

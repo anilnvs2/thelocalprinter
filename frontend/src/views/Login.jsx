@@ -33,7 +33,9 @@ const Login = () => {
         else if (onboarding.firstBusinessStatus === "rejected") router.push("/vendor/businesses");
         else router.push("/vendor/dashboard");
       } else if (user.role === "POSTER_BOY") {
-        router.push(user.approvalStatus === "approved" ? "/posterboy/dashboard" : "/posterboy/pending");
+        // The dashboard routes pending workers to the form or the
+        // awaiting-approval screen depending on whether they've submitted.
+        router.push("/posterboy/dashboard");
       } else {
         const redirectMap = { ADMIN: "/admin/dashboard", USER: "/user/dashboard/wishlist" };
         router.push(redirectMap[user.role] || "/user/dashboard/wishlist");

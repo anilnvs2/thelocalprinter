@@ -113,6 +113,12 @@ const posterBoyProfileSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    // When the worker can take up jobs.
+    workTiming: {
+      type: String,
+      trim: true,
+      default: "",
+    },
 
     // Past work photos / videos (max 10, enforced in the controller).
     workMedia: {

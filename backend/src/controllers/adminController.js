@@ -1614,6 +1614,16 @@ exports.updateUserApprovalStatus = async (req, res) => {
       { new: true }
     ).select("fullName email role publicId approvalStatus resellerApprovalStatus registrationType isActive");
 
+    // Worker boys submit their profile form BEFORE account approval, so this
+    // single review also settles the submitted profile (one approval step).
+    if (user.role === ROLES.POSTER_BOY) {
+      const PosterBoyProfile = require("../models/PosterBoyProfile");
+      await PosterBoyProfile.updateOne(
+        { user: user._id },
+        { $set: { status: status === "approved" ? "approved" : "rejected" } }
+      );
+    }
+
     res.status(200).json({
       success: true,
       message: `${user.role === ROLES.POSTER_BOY ? "Poster boy" : "Vendor"} account ${status}`,

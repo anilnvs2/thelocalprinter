@@ -69,6 +69,10 @@ const seedPosterBoyCategory = async () => {
 
     if (sub) {
       let dirty = false;
+      if (sub.name !== skillName) {
+        sub.name = skillName;
+        dirty = true;
+      }
       if (String(sub.parentId) !== String(parent._id)) {
         sub.parentId = parent._id;
         dirty = true;
@@ -98,6 +102,26 @@ const seedPosterBoyCategory = async () => {
     }
   }
 
+  // Replace flow: drop skill subcategories that are no longer offered so the
+  // public category page and search only expose the current skill list.
+  const keepSlugs = new Set(POSTER_BOY_SKILLS.map(slugify));
+  const stale = await Category.find({
+    parentId: parent._id,
+    type: "subcategory",
+    slug: { $nin: [...keepSlugs] },
+  });
+  let removedSkills = 0;
+  if (stale.length) {
+    const staleIds = stale.map((s) => s._id);
+    await PosterBoyProfile.updateMany(
+      { skillIds: { $in: staleIds } },
+      { $pull: { skillIds: { $in: staleIds } } }
+    );
+    await Category.deleteMany({ _id: { $in: staleIds } });
+    removedSkills = stale.length;
+  }
+
+  // Re-fetch after the cleanup so backfill only resolves the current skills.
   const skillMap = await getSkillMap(parent._id);
 
   const profiles = await PosterBoyProfile.find({});
@@ -115,7 +139,7 @@ const seedPosterBoyCategory = async () => {
     profilesBackfilled++;
   }
 
-  return { parent, skillMap, skills: POSTER_BOY_SKILLS, profilesBackfilled };
+  return { parent, skillMap, skills: POSTER_BOY_SKILLS, profilesBackfilled, removedSkills };
 };
 
 module.exports = { seedPosterBoyCategory };
@@ -125,11 +149,12 @@ if (require.main === module) {
     try {
       await mongoose.connect(process.env.MONGODB_URI);
       console.log("Connected to MongoDB");
-      const { parent, profilesBackfilled } = await seedPosterBoyCategory();
+      const { parent, profilesBackfilled, removedSkills } = await seedPosterBoyCategory();
       console.log(`Poster Boy category ready: ${parent.name} (${parent.slug}) [${parent._id}]`);
       const subs = await Category.find({ parentId: parent._id, type: "subcategory" });
       console.log(`Skill subcategories: ${subs.length}`);
       subs.forEach((s) => console.log(`  - ${s.name} (${s.slug})`));
+      if (removedSkills) console.log(`Stale skill subcategories removed: ${removedSkills}`);
       console.log(`Profiles backfilled: ${profilesBackfilled}`);
       await mongoose.disconnect();
       console.log("Disconnected from MongoDB");

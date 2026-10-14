@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   User, Phone, CreditCard, Languages, MapPin, Wrench, Camera,
-  Loader2, AlertCircle, CheckCircle, Clock, Plus, X, ImagePlus, Video,
+  Loader2, AlertCircle, CheckCircle, Clock, Plus, X, ImagePlus, Video, Eye,
 } from "lucide-react";
 import ThemeToggle from "../../components/ThemeToggle";
 import { Card, CardContent } from "../../components/ui/card";
@@ -13,6 +14,7 @@ import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { getPosterBoyProfile, updatePosterBoyProfile } from "../../services/posterBoyService";
 import ProtectedVideo from "../../components/media/ProtectedVideo";
+import WatermarkLogo from "../../components/media/WatermarkLogo";
 import {
   ALLOWED_FOLDERS, uploadToCloudinary, getFileCategory,
 } from "../../lib/cloudinary";
@@ -23,12 +25,12 @@ const LANGUAGE_OPTIONS = [
 ];
 
 const SKILL_OPTIONS = [
-  "Flex & Vinyl pasting",
-  "Outdoor safety belt worker",
-  "Flyer distribution boys",
-  "Board Fitting boys",
-  "flyer inserts",
-  "reckoning boy",
+  "Newspaper Inserts",
+  "Pasting Boy",
+  "Safety Belt Worker",
+  "Reckoning Boy",
+  "Installation Boy",
+  "Distribution Boy",
 ];
 
 const MAX_WORK_MEDIA = 10;
@@ -37,6 +39,7 @@ const WORK_RADIUS_OPTIONS = ["10 km to 30 km", "No Limit"];
 const STRENGTH_OPTIONS = ["Single Person", "Team"];
 const ORDER_ACCEPTED_OPTIONS = ["Small", "Medium", "Bulk", "No Limit"];
 const BOOKING_TIMELINE_OPTIONS = ["1 day prior", "2 days prior", "Sameday"];
+const TIMING_OPTIONS = ["Day Only", "Day & Night"];
 
 const emptyForm = {
   aadhaarNumber: "",
@@ -49,6 +52,7 @@ const emptyForm = {
   strength: "",
   orderAccepted: [],
   bookingTimeline: "",
+  workTiming: "",
   workMedia: [],
 };
 
@@ -181,6 +185,7 @@ const Section = ({ icon: Icon, title, subtitle, children }) => (
 );
 
 const PosterBoyDashboard = () => {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -201,6 +206,7 @@ const PosterBoyDashboard = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({});
   const [uploadError, setUploadError] = useState("");
+  const [previewIndex, setPreviewIndex] = useState(null);
   const fileInputRef = useRef(null);
 
   const updateField = (field, value) => {
@@ -219,6 +225,13 @@ const PosterBoyDashboard = () => {
       const p = res.data.profile;
       setAccountUser(u);
       setProfile(p);
+
+      // Form-before-approval flow: once a pending account has already
+      // submitted its profile, send the worker to the awaiting-approval screen.
+      if (u?.approvalStatus === "pending" && p) {
+        router.push("/posterboy/pending");
+        return;
+      }
 
       const source = (p && p.pendingChangeData) || p || {};
       const skills = Array.isArray(source.skills) ? source.skills : [];
@@ -241,6 +254,7 @@ const PosterBoyDashboard = () => {
         strength: source.strength || "",
         orderAccepted: Array.isArray(source.orderAccepted) ? source.orderAccepted : [],
         bookingTimeline: source.bookingTimeline || "",
+        workTiming: source.workTiming || "",
         workMedia: Array.isArray(source.workMedia) ? source.workMedia : [],
       });
       setOthersChecked(custom.length > 0);
@@ -250,7 +264,7 @@ const PosterBoyDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -280,6 +294,9 @@ const PosterBoyDashboard = () => {
     if (!BOOKING_TIMELINE_OPTIONS.includes(form.bookingTimeline)) {
       e.bookingTimeline = "Please select your booking timeline";
     }
+    if (!TIMING_OPTIONS.includes(form.workTiming)) {
+      e.workTiming = "Please select Day Only or Day & Night";
+    }
     if (form.workMedia.length < 1) {
       e.workMedia = "At least one work photo or video is required";
     }
@@ -305,12 +322,18 @@ const PosterBoyDashboard = () => {
         strength: form.strength,
         orderAccepted: form.orderAccepted,
         bookingTimeline: form.bookingTimeline,
+        workTiming: form.workTiming,
         workMedia: form.workMedia,
       };
       const res = await updatePosterBoyProfile(payload);
       setProfile(res.data.profile);
       setNotice(res.message || "Profile submitted for admin approval.");
       window.scrollTo({ top: 0, behavior: "smooth" });
+      // First submission from a still-pending account → the review now sits
+      // with the admin, so route the worker to the awaiting-approval screen.
+      if (accountUser?.approvalStatus === "pending") {
+        setTimeout(() => router.push("/posterboy/pending"), 1200);
+      }
     } catch (err) {
       const data = err.response?.data;
       if (data?.errors && Array.isArray(data.errors)) {
@@ -748,6 +771,15 @@ const PosterBoyDashboard = () => {
                     onChange={(val) => updateField("bookingTimeline", val)}
                   />
                 </FormField>
+
+                <FormField label="Timings" required error={errors.workTiming} hint="When can you take up work?">
+                  <RadioGrid
+                    name="workTiming"
+                    options={TIMING_OPTIONS}
+                    value={form.workTiming}
+                    onChange={(val) => updateField("workTiming", val)}
+                  />
+                </FormField>
               </div>
             </Section>
 
@@ -780,6 +812,14 @@ const PosterBoyDashboard = () => {
                           <Video size={12} />
                         </span>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => setPreviewIndex(i)}
+                        aria-label="Preview"
+                        className="absolute top-1 left-1 p-1 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                      >
+                        <Eye size={12} />
+                      </button>
                       <button
                         type="button"
                         onClick={() => removeMedia(i)}
@@ -874,6 +914,41 @@ const PosterBoyDashboard = () => {
             <Clock size={12} />
             Profile status: {profileStatus}
           </Badge>
+        </div>
+      )}
+
+      {/* Media preview lightbox */}
+      {previewIndex != null && form.workMedia[previewIndex] && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setPreviewIndex(null)}
+        >
+          <button
+            type="button"
+            className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+            onClick={() => setPreviewIndex(null)}
+            aria-label="Close preview"
+          >
+            <X size={20} />
+          </button>
+          {(() => {
+            const m = form.workMedia[previewIndex];
+            return m.resourceType === "video" ? (
+              <div className="w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
+                <ProtectedVideo src={m.url} variant="player" />
+              </div>
+            ) : (
+              <div className="relative" onClick={(e) => e.stopPropagation()}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={m.url}
+                  alt=""
+                  className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+                />
+                <WatermarkLogo size="lg" />
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

@@ -155,7 +155,7 @@ const Signup = () => {
       if (isDirectFlow) {
         const posterBoy = role === "POSTER_BOY";
         await signup(fullName.trim(), email.toLowerCase().trim(), password, role, { fullName: fullName.trim(), email: email.toLowerCase().trim(), password, role, whatsappNumber: whatsappNumber.trim() || undefined });
-        router.push(posterBoy ? "/posterboy/pending" : "/vendor/businesses/new");
+        router.push(posterBoy ? "/posterboy/dashboard" : "/vendor/businesses/new");
         return;
       }
       const payload = { fullName: fullName.trim(), email: email.toLowerCase().trim(), password, role: "USER", whatsappNumber: whatsappNumber.trim() || undefined, registrationType };

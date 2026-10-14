@@ -12,6 +12,8 @@ import {
   Mail,
   CheckCircle,
   XCircle,
+  X,
+  Play,
 } from "lucide-react";
 import {
   getPosterBoys,
@@ -54,6 +56,8 @@ import {
 } from "../../components/ui/dialog";
 import { Avatar, AvatarFallback } from "../../components/ui/avatar";
 import CopyableId from "../../components/admin/CopyableId";
+import ProtectedVideo from "../../components/media/ProtectedVideo";
+import WatermarkLogo from "../../components/media/WatermarkLogo";
 
 const AdminPosterBoys = () => {
   const [items, setItems] = useState([]);
@@ -69,6 +73,7 @@ const AdminPosterBoys = () => {
   const [accountConfirm, setAccountConfirm] = useState(null);
   const [profileConfirm, setProfileConfirm] = useState(null);
   const [actionLoading2, setActionLoading2] = useState(false);
+  const [mediaOpenIndex, setMediaOpenIndex] = useState(null);
   const debounceRef = useRef(null);
 
   const fetchPosterBoys = async (p = 1, s = "") => {
@@ -164,6 +169,11 @@ const AdminPosterBoys = () => {
                   languages: updated.languages,
                   address: updated.address,
                   aadhaarNumber: updated.aadhaarNumber,
+                  workRadius: updated.workRadius,
+                  strength: updated.strength,
+                  orderAccepted: updated.orderAccepted,
+                  bookingTimeline: updated.bookingTimeline,
+                  workTiming: updated.workTiming,
                   workMedia: updated.workMedia,
                   profileCompleted: updated.profileCompleted,
                 },
@@ -184,6 +194,11 @@ const AdminPosterBoys = () => {
                 languages: updated.languages,
                 address: updated.address,
                 aadhaarNumber: updated.aadhaarNumber,
+                workRadius: updated.workRadius,
+                strength: updated.strength,
+                orderAccepted: updated.orderAccepted,
+                bookingTimeline: updated.bookingTimeline,
+                workTiming: updated.workTiming,
                 workMedia: updated.workMedia,
                 profileCompleted: updated.profileCompleted,
               },
@@ -404,7 +419,8 @@ const AdminPosterBoys = () => {
                               </>
                             )}
 
-                            {v.profile && (
+                            {v.profile &&
+                              (v.profile.status !== "approved" || v.profile.hasPendingChange) && (
                               <>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -506,8 +522,21 @@ const AdminPosterBoys = () => {
       </Card>
 
       {/* Profile detail */}
-      <Dialog open={!!viewTarget} onOpenChange={(open) => !open && setViewTarget(null)}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <Dialog
+        open={!!viewTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewTarget(null);
+            setMediaOpenIndex(null);
+          }
+        }}
+      >
+        <DialogContent
+          className="max-w-2xl max-h-[85vh] overflow-y-auto"
+          onInteractOutside={(e) => { if (mediaOpenIndex != null) e.preventDefault(); }}
+          onPointerDownOutside={(e) => { if (mediaOpenIndex != null) e.preventDefault(); }}
+          onEscapeKeyDown={(e) => { if (mediaOpenIndex != null) e.preventDefault(); }}
+        >
           <DialogHeader>
             <DialogTitle>{viewTarget?.fullName}</DialogTitle>
             <DialogDescription>
@@ -599,6 +628,10 @@ const AdminPosterBoys = () => {
                   <Label className="text-xs text-muted-foreground">Booking Timeline</Label>
                   <p className="text-sm font-medium">{viewTarget.profile.bookingTimeline || "—"}</p>
                 </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Timings</Label>
+                  <p className="text-sm font-medium">{viewTarget.profile.workTiming || "—"}</p>
+                </div>
               </div>
 
               {viewTarget.profile.workMedia?.length > 0 && (
@@ -608,23 +641,42 @@ const AdminPosterBoys = () => {
                   </Label>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-1.5">
                     {viewTarget.profile.workMedia.map((m, i) => (
-                      <div
+                      <button
                         key={m.url + i}
-                        className="aspect-square rounded-lg overflow-hidden border bg-muted"
+                        type="button"
+                        onClick={() => setMediaOpenIndex(i)}
+                        className="group relative aspect-square rounded-lg overflow-hidden border bg-muted cursor-pointer"
                       >
                         {m.resourceType === "video" ? (
-                          <video
-                            src={m.url}
-                            className="w-full h-full object-cover"
-                            muted
-                            playsInline
-                            preload="metadata"
-                          />
+                          <>
+                            <video
+                              src={m.url}
+                              className="w-full h-full object-cover pointer-events-none"
+                              muted
+                              playsInline
+                              preload="metadata"
+                            />
+                            <span className="absolute inset-0 flex items-center justify-center bg-black/30">
+                              <Play size={22} className="text-white" fill="currentColor" />
+                            </span>
+                            <span className="absolute bottom-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white">
+                              <Eye size={13} />
+                            </span>
+                          </>
                         ) : (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={m.url} alt="" className="w-full h-full object-cover" />
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={m.url}
+                              alt=""
+                              className="w-full h-full object-cover pointer-events-none"
+                            />
+                            <span className="absolute inset-0 flex items-center justify-center bg-black/20">
+                              <Eye size={18} className="text-white" />
+                            </span>
+                          </>
                         )}
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -646,6 +698,55 @@ const AdminPosterBoys = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Media lightbox */}
+      {mediaOpenIndex != null && viewTarget?.profile?.workMedia?.[mediaOpenIndex] && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 pointer-events-auto"
+          onClick={() => setMediaOpenIndex(null)}
+        >
+          {(() => {
+            const m = viewTarget.profile.workMedia[mediaOpenIndex];
+            return m.resourceType === "video" ? (
+              <div
+                className="relative w-full max-w-3xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className="absolute -top-3 -right-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white shadow-lg transition-colors hover:bg-black"
+                  onClick={() => setMediaOpenIndex(null)}
+                  aria-label="Close preview"
+                >
+                  <X size={16} />
+                </button>
+                <ProtectedVideo src={m.url} variant="player" />
+              </div>
+            ) : (
+              <div
+                className="relative"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className="absolute -top-3 -right-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white shadow-lg transition-colors hover:bg-black"
+                  onClick={() => setMediaOpenIndex(null)}
+                  aria-label="Close preview"
+                >
+                  <X size={16} />
+                </button>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={m.url}
+                  alt=""
+                  className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain"
+                />
+                <WatermarkLogo size="lg" />
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Delete */}
       <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

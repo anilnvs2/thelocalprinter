@@ -18,6 +18,7 @@ const WORK_RADIUS_OPTIONS = ["10 km to 30 km", "No Limit"];
 const STRENGTH_OPTIONS = ["Single Person", "Team"];
 const ORDER_ACCEPTED_OPTIONS = ["Small", "Medium", "Bulk", "No Limit"];
 const BOOKING_TIMELINE_OPTIONS = ["1 day prior", "2 days prior", "Sameday"];
+const WORK_TIMING_OPTIONS = ["Day Only", "Day & Night"];
 
 const PROFILE_FIELDS = [
   "aadhaarNumber",
@@ -32,6 +33,7 @@ const PROFILE_FIELDS = [
   "strength",
   "orderAccepted",
   "bookingTimeline",
+  "workTiming",
   "workMedia",
 ];
 
@@ -57,6 +59,7 @@ const sanitizeProfileData = (body) => ({
     ? [...new Set(body.orderAccepted.filter((o) => typeof o === "string" && o.trim()).map((o) => o.trim()))]
     : [],
   bookingTimeline: typeof body.bookingTimeline === "string" ? body.bookingTimeline.trim() : "",
+  workTiming: typeof body.workTiming === "string" ? body.workTiming.trim() : "",
   workMedia: Array.isArray(body.workMedia) ? body.workMedia : [],
 });
 
@@ -120,6 +123,9 @@ const validateProfile = (data) => {
   if (!BOOKING_TIMELINE_OPTIONS.includes(data.bookingTimeline)) {
     errors.bookingTimeline = "Please select your booking timeline";
   }
+  if (!WORK_TIMING_OPTIONS.includes(data.workTiming)) {
+    errors.workTiming = "Please select Day Only or Day & Night";
+  }
 
   return { errors, skills, languages, workMedia };
 };
@@ -135,6 +141,7 @@ const buildPayload = (data, skills, languages, workMedia) => ({
   strength: data.strength,
   orderAccepted: data.orderAccepted,
   bookingTimeline: data.bookingTimeline,
+  workTiming: data.workTiming,
   workMedia: workMedia.map((m) => ({ url: m.url.trim(), resourceType: m.resourceType })),
 });
 
@@ -155,12 +162,14 @@ const readApprovedUser = async (userId) => {
   if (user.role !== "POSTER_BOY") {
     return { error: { status: 403, message: "Access denied. Insufficient permissions." } };
   }
-  if (user.approvalStatus !== "approved") {
+  // Form-before-approval flow: a pending account MAY read and submit the
+  // profile form — that submission is what the admin reviews. Only rejected
+  // accounts are locked out.
+  if (user.approvalStatus === "rejected") {
     return {
       error: {
         status: 403,
-        message: "Account is pending approval. Please wait for admin approval.",
-        pendingApproval: true,
+        message: "Account has been rejected. Please contact support.",
       },
     };
   }
@@ -192,6 +201,7 @@ const shapeProfile = (profile) => {
     strength: profile.strength || "",
     orderAccepted: profile.orderAccepted || [],
     bookingTimeline: profile.bookingTimeline || "",
+    workTiming: profile.workTiming || "",
     workMedia: profile.workMedia,
     status: profile.status,
     profileCompleted: profile.profileCompleted,
@@ -414,6 +424,7 @@ exports.getPosterBoys = async (req, res) => {
               strength: profile.strength || "",
               orderAccepted: profile.orderAccepted || [],
               bookingTimeline: profile.bookingTimeline || "",
+              workTiming: profile.workTiming || "",
               workMedia: profile.workMedia,
               profileCompleted: profile.profileCompleted,
               hasPendingChange: !!(profile.pendingChange && profile.pendingChange.data),

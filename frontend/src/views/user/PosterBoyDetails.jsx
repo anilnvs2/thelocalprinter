@@ -5,14 +5,17 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   BadgeCheck,
+  Eye,
   Languages,
   Loader2,
   MapPin,
   Megaphone,
   MessageCircle,
   Phone,
+  Play,
   ShieldCheck,
   Video,
+  X,
 } from "lucide-react";
 import { getPublicPosterBoy, revealPosterBoyContact } from "../../services/userService";
 import { Card, CardContent } from "../../components/ui/card";
@@ -37,6 +40,7 @@ const PosterBoyDetails = () => {
   const [contact, setContact] = useState(null);
   const [contactLoading, setContactLoading] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
+  const [preview, setPreview] = useState(null); // { type: "image"|"video", url, list, index }
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +92,16 @@ const PosterBoyDetails = () => {
     setImgIndex((i) => (i + dir + workImages.length) % workImages.length);
   };
 
+  const openImagePreview = (index) => setPreview({ type: "image", list: workImages, index });
+  const openVideoPreview = (index) =>
+    setPreview({ type: "video", list: workVideos.map((v) => v.url), index });
+  const stepPreview = (dir) => {
+    if (!preview) return;
+    const len = preview.list.length;
+    if (len < 2) return;
+    setPreview((p) => ({ ...p, index: (p.index + dir + len) % len }));
+  };
+
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -129,6 +143,16 @@ const PosterBoyDetails = () => {
               <Megaphone className="h-12 w-12" />
             )}
             {currentImage && <WatermarkLogo position="top-right" size="sm" />}
+            {currentImage && (
+              <button
+                type="button"
+                onClick={() => openImagePreview(imgIndex % workImages.length)}
+                aria-label="View full image"
+                className="absolute top-2 left-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+              >
+                <Eye size={15} />
+              </button>
+            )}
             {workImages.length > 1 && (
               <>
                 <button
@@ -195,7 +219,7 @@ const PosterBoyDetails = () => {
               </p>
             )}
 
-            {(pb.workRadius || pb.strength || pb.bookingTimeline || (pb.orderAccepted || []).length > 0) && (
+            {(pb.workRadius || pb.strength || pb.bookingTimeline || pb.workTiming || (pb.orderAccepted || []).length > 0) && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {pb.workRadius && (
                   <div className="rounded-lg border border-border bg-muted/40 p-2.5">
@@ -219,6 +243,12 @@ const PosterBoyDetails = () => {
                   <div className="rounded-lg border border-border bg-muted/40 p-2.5">
                     <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Booking</p>
                     <p className="text-sm font-semibold">{pb.bookingTimeline}</p>
+                  </div>
+                )}
+                {pb.workTiming && (
+                  <div className="rounded-lg border border-border bg-muted/40 p-2.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Timings</p>
+                    <p className="text-sm font-semibold">{pb.workTiming}</p>
                   </div>
                 )}
               </div>
@@ -287,9 +317,29 @@ const PosterBoyDetails = () => {
                 <Video size={16} className="text-brand-orange" />
                 <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Work Videos</h2>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {workVideos.map((v, i) => (
-                  <ProtectedVideo key={v.url + i} src={v.url} label={`Work video ${i + 1}`} className="rounded-lg" />
+                  <button
+                    key={v.url + i}
+                    type="button"
+                    onClick={() => openVideoPreview(i)}
+                    className="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
+                  >
+                    <video
+                      src={v.url}
+                      className="h-full w-full object-cover pointer-events-none"
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <Play size={22} className="text-white" fill="currentColor" />
+                    </span>
+                    <span className="absolute bottom-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white">
+                      <Eye size={13} />
+                    </span>
+                    <WatermarkLogo size="sm" />
+                  </button>
                 ))}
               </div>
             </CardContent>
@@ -300,21 +350,82 @@ const PosterBoyDetails = () => {
           <Card>
             <CardContent className="p-5 sm:p-6">
               <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-muted-foreground">Work Pics</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {workImages.map((url, i) => (
                   <button
                     key={url + i}
                     type="button"
-                    onClick={() => setImgIndex(i)}
-                    className={`relative aspect-square overflow-hidden rounded-lg border-2 transition-colors ${i === imgIndex % workImages.length ? "border-brand-orange" : "border-transparent hover:border-brand-orange/40"}`}
+                    onClick={() => { setImgIndex(i); openImagePreview(i); }}
+                    className={`group relative aspect-square overflow-hidden rounded-lg border-2 transition-colors ${i === imgIndex % workImages.length ? "border-brand-orange" : "border-transparent hover:border-brand-orange/40"}`}
                   >
                     <img src={url} alt={`Work ${i + 1}`} className="h-full w-full object-cover" loading="lazy" />
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
+                      <Eye size={18} className="text-white opacity-0 group-hover:opacity-100" />
+                    </span>
                     <WatermarkLogo position="bottom-right" size="sm" />
                   </button>
                 ))}
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Fullscreen media lightbox */}
+        {preview && preview.list[preview.index] && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+            onClick={() => setPreview(null)}
+          >
+            <button
+              type="button"
+              className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+              onClick={() => setPreview(null)}
+              aria-label="Close"
+            >
+              <X size={20} />
+            </button>
+            {preview.list.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); stepPreview(-1); }}
+                  aria-label="Previous"
+                  className="absolute left-3 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); stepPreview(1); }}
+                  aria-label="Next"
+                  className="absolute right-3 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+                >
+                  ›
+                </button>
+              </>
+            )}
+            <span className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-bold tabular-nums text-white">
+              {preview.index + 1}/{preview.list.length}
+            </span>
+            {(() => {
+              const url = preview.list[preview.index];
+              return preview.type === "video" ? (
+                <div className="w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
+                  <ProtectedVideo src={url} variant="player" />
+                </div>
+              ) : (
+                <div className="relative" onClick={(e) => e.stopPropagation()}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt=""
+                    className="max-h-[85vh] max-w-[92vw] rounded-lg object-contain"
+                  />
+                  <WatermarkLogo size="lg" />
+                </div>
+              );
+            })()}
+          </div>
         )}
       </div>
     </div>

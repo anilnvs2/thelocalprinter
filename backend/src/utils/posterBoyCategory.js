@@ -5,12 +5,12 @@ const POSTER_BOY_CATEGORY_SLUG = "poster-boy";
 
 // Must stay in sync with the fixed skill options in the poster boy dashboard.
 const POSTER_BOY_SKILLS = [
-  "Flex & Vinyl pasting",
-  "Outdoor safety belt worker",
-  "Flyer distribution boys",
-  "Board Fitting boys",
-  "flyer inserts",
-  "reckoning boy",
+  "Newspaper Inserts",
+  "Pasting Boy",
+  "Safety Belt Worker",
+  "Reckoning Boy",
+  "Installation Boy",
+  "Distribution Boy",
 ];
 
 const POSTER_BOY_IMAGE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none"><path d="M10 26v12a4 4 0 004 4h6l4 10h6l-4-10h6l14 6V16L26 22H14a4 4 0 00-4 4z" stroke="#F45116" stroke-width="3" stroke-linejoin="round"/><path d="M46 24a10 10 0 010 16" stroke="#F45116" stroke-width="3" stroke-linecap="round"/><path d="M52 18a18 18 0 010 28" stroke="#F45116" stroke-width="3" stroke-linecap="round"/></svg>`;

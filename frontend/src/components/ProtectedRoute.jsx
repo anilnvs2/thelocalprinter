@@ -64,12 +64,14 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to={redirectMap[user.role] || "/login"} replace />;
   }
 
-  // Poster boys need admin approval before they can open their dashboard.
-  // /posterboy/pending is the only route they may see while unapproved.
+  // Poster boys fill their profile form BEFORE admin approval. While their
+  // account is pending they may only reach the form (/posterboy/dashboard)
+  // and the awaiting-approval screen (/posterboy/pending).
   if (
     user.role === "POSTER_BOY" &&
     user.approvalStatus !== "approved" &&
-    pathname !== "/posterboy/pending"
+    pathname !== "/posterboy/pending" &&
+    pathname !== "/posterboy/dashboard"
   ) {
     return <Navigate to="/posterboy/pending" replace />;
   }

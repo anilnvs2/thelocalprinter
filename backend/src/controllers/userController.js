@@ -792,6 +792,7 @@ const toPublicPosterBoy = (profile, user, distance) => {
     strength: profile.strength || "",
     orderAccepted: profile.orderAccepted || [],
     bookingTimeline: profile.bookingTimeline || "",
+    workTiming: profile.workTiming || "",
     workMedia,
     coverImage: cover ? cover.url : "",
     gpsCoordinates: profile.gpsCoordinates || { lat: null, lng: null },
