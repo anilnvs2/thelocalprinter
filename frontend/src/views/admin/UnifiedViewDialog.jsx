@@ -531,6 +531,34 @@ const UnifiedViewDialog = ({ open, onOpenChange, account }) => {
                         <div className="sm:col-span-2">
                           <ArrayField label="Tags" value={business.tags} />
                         </div>
+                        {Array.isArray(business.additionalCategories) &&
+                          business.additionalCategories
+                            .filter((entry) => entry?.categoryId?.name)
+                            .map((entry, idx) => (
+                              <div
+                                key={entry?.categoryId?._id || idx}
+                                className="sm:col-span-2 rounded-md border border-primary/20 bg-primary/5 p-3 space-y-3"
+                              >
+                                <div>
+                                  <Field
+                                    label={`Additional Category ${idx + 1}`}
+                                    value={entry.categoryId.name}
+                                  />
+                                  {entry.categoryId?.image && (
+                                    entry.categoryId.image.trim().startsWith('<') ? <div className="h-8 w-8 [&>svg]:w-8 [&>svg]:h-8" dangerouslySetInnerHTML={{ __html: entry.categoryId.image }} /> : <img src={entry.categoryId.image} alt="" className="h-8 w-8 object-contain mt-1" />
+                                  )}
+                                </div>
+                                {Array.isArray(entry.serviceIds) && entry.serviceIds.length > 0 && (
+                                  <ArrayField
+                                    label="Services"
+                                    value={entry.serviceIds.map((s) => s?.name || s)}
+                                  />
+                                )}
+                                {Array.isArray(entry.tags) && entry.tags.length > 0 && (
+                                  <ArrayField label="Tags" value={entry.tags} />
+                                )}
+                              </div>
+                            ))}
                         <div className="sm:col-span-2">
                           <Field label="Full Address" value={business.address} />
                         </div>

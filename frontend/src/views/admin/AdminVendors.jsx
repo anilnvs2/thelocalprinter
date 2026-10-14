@@ -65,6 +65,18 @@ import { Avatar, AvatarFallback } from "../../components/ui/avatar";
 import CopyableId from "../../components/admin/CopyableId";
 import UnifiedViewDialog from "./UnifiedViewDialog";
 
+// Primary category + any admin-added additional categories, in order.
+const getBusinessCategoryNames = (b) => {
+  const names = [];
+  const primary = b?.categoryId?.name || (typeof b?.category === "string" ? b.category : b?.category?.name);
+  if (primary) names.push(primary);
+  (b?.additionalCategories || []).forEach((entry) => {
+    const name = entry?.categoryId?.name;
+    if (name && !names.includes(name)) names.push(name);
+  });
+  return names;
+};
+
 const AdminVendors = () => {
   const router = useRouter();
   const [vendors, setVendors] = useState([]);
@@ -621,9 +633,9 @@ const AdminVendors = () => {
                 >
                   <div className="min-w-0 flex-1 basis-40">
                     <p className="truncate text-sm font-semibold text-foreground">{b.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground break-words">
                       {[
-                        typeof b.category === "string" ? b.category : b.category?.name,
+                        getBusinessCategoryNames(b).join(", "),
                         b.city,
                       ]
                         .filter(Boolean)

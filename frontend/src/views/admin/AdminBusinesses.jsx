@@ -70,6 +70,54 @@ import {
 import { Avatar, AvatarFallback } from "../../components/ui/avatar";
 import CopyableId from "../../components/admin/CopyableId";
 
+// Primary category + any admin-added additional categories, in order.
+const getAllCategories = (b) => {
+  const list = [];
+  const primaryName = b?.categoryId?.name || b?.category;
+  if (primaryName) {
+    list.push({ name: primaryName, image: b?.categoryId?.image || null });
+  }
+  (b?.additionalCategories || []).forEach((entry) => {
+    const name = entry?.categoryId?.name;
+    if (!name) return;
+    if (list.some((c) => c.name === name)) return;
+    list.push({ name, image: entry?.categoryId?.image || null });
+  });
+  return list;
+};
+
+// Primary services + services picked under each additional category, de-duplicated.
+const getAllServices = (b) => {
+  const map = new Map();
+  (b?.serviceIds || []).forEach((s) => {
+    const name = s?.name || (typeof s === "string" ? s : null);
+    if (!name) return;
+    const key = s?._id || name;
+    if (!map.has(key)) map.set(key, { _id: key, name });
+  });
+  (b?.additionalCategories || []).forEach((entry) => {
+    (entry?.serviceIds || []).forEach((s) => {
+      const name = s?.name || (typeof s === "string" ? s : null);
+      if (!name) return;
+      const key = s?._id || `${entry?.categoryId?._id || entry?.categoryId}-${name}`;
+      if (!map.has(key)) map.set(key, { _id: key, name });
+    });
+  });
+  return [...map.values()];
+};
+
+const CategoryIcon = ({ image }) => {
+  if (!image || !image.trim()) return null;
+  return image.trim().startsWith("<") ? (
+    <div
+      className="h-4 w-4 shrink-0 [&>svg]:w-4 [&>svg]:h-4"
+      dangerouslySetInnerHTML={{ __html: image }}
+    />
+  ) : (
+    <img src={image} alt="" className="h-4 w-4 shrink-0 object-contain" />
+  );
+};
+
 const AdminBusinesses = () => {
   const router = useRouter();
   const [businesses, setBusinesses] = useState([]);
@@ -502,6 +550,8 @@ const AdminBusinesses = () => {
                       (b.pendingChange.type === "EDIT" || b.pendingChange.type === "DELETE")
                         ? b.pendingChange
                         : null;
+                    const allCategories = getAllCategories(b);
+                    const allServices = getAllServices(b);
                     return (
                     <TableRow key={b._id}>
                       <TableCell>
@@ -515,15 +565,23 @@ const AdminBusinesses = () => {
                             <p className="font-medium truncate max-w-[200px]">
                               {b.name}
                             </p>
-                            <div className="flex items-center gap-1.5">
-                              {b.categoryId?.image && (b.categoryId.image.trim().startsWith('<') ? <div className="h-4 w-4 [&>svg]:w-4 [&>svg]:h-4" dangerouslySetInnerHTML={{ __html: b.categoryId.image }} /> : <img src={b.categoryId.image} alt="" className="h-4 w-4 object-contain" />)}
-                              <p className="text-sm text-muted-foreground truncate max-w-[200px]">
-                                {b.category || "-"}
-                              </p>
-                            </div>
-                            {b.serviceIds && b.serviceIds.length > 0 && (
+                            {allCategories.length > 0 ? (
+                              <div className="space-y-0.5">
+                                {allCategories.map((cat, idx) => (
+                                  <div key={idx} className="flex items-center gap-1.5">
+                                    <CategoryIcon image={cat.image} />
+                                    <p className="text-sm text-muted-foreground truncate max-w-[200px]">
+                                      {cat.name}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">-</p>
+                            )}
+                            {allServices.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-1">
-                                {b.serviceIds.map((service) => (
+                                {allServices.map((service) => (
                                   <Badge key={service._id} variant="secondary" className="text-[10px]">
                                     {service.name}
                                   </Badge>

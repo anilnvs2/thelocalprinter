@@ -351,6 +351,8 @@ exports.getBusinesses = async (req, res) => {
         .populate("vendor", "fullName email publicId role isActive")
         .populate("categoryId", "name image")
         .populate("serviceIds", "name")
+        .populate("additionalCategories.categoryId", "name image")
+        .populate("additionalCategories.serviceIds", "name")
         .select("-__v")
         .lean(),
       Business.countDocuments(query),
