@@ -420,7 +420,10 @@ html:not(.dark) .hover\:shadow-md:hover {
 }
 
 /* ── Dialogs ── */
-html:not(.dark) [data-state="open"] > div {
+/* NOTE: [role="dialog"] itself is the styled DialogContent surface — its
+   direct children (header, scroll area, footer) must NOT be re-skinned as
+   nested white cards, so dialogs are excluded here. */
+html:not(.dark) [data-state="open"]:not([role="dialog"]) > div {
   background: #ffffff;
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 4px 12px rgba(0,0,0,.1), 0 20px 48px rgba(0,0,0,.14), 0 0 0 1px rgba(249,115,22,.06);

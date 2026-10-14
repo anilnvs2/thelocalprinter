@@ -89,6 +89,8 @@ export default function SubCategoryPage({ params }) {
 
   const subcategoryName = subCategory?.name || decodeURIComponent(subCategorySlug).replace(/-/g, ' ');
   const categoryName = parentCategory?.name || decodeURIComponent(slug).replace(/-/g, ' ');
+  // Subcategory image first, parent category image as fallback.
+  const heroImage = (subCategory?.image || '').trim() || (parentCategory?.image || '').trim() || '';
 
   return (
     <div className="bg-brand-light min-h-screen">
@@ -96,6 +98,7 @@ export default function SubCategoryPage({ params }) {
         badge="BROWSE BY SUBCATEGORY"
         title={subcategoryName}
         subtitle={`Find the best ${subcategoryName.toLowerCase()} services near you.`}
+        backgroundImage={heroImage}
       />
       <div className="max-w-screen-xl mx-auto px-4 md:px-6 py-16">
         <nav className="flex items-center gap-2 text-[14px] text-brand-muted mb-8">

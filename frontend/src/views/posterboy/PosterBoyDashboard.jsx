@@ -14,9 +14,10 @@ import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { getPosterBoyProfile, updatePosterBoyProfile } from "../../services/posterBoyService";
 import ProtectedVideo from "../../components/media/ProtectedVideo";
+import { VideoPlayer } from "../../components/media/MediaViewers";
 import WatermarkLogo from "../../components/media/WatermarkLogo";
 import {
-  ALLOWED_FOLDERS, uploadToCloudinary, getFileCategory,
+  ALLOWED_FOLDERS, uploadToCloudinary, getFileCategory, isVideoMedia,
 } from "../../lib/cloudinary";
 
 const LANGUAGE_OPTIONS = [
@@ -461,7 +462,12 @@ const PosterBoyDashboard = () => {
       const errs = [];
       results.forEach((r, i) => {
         if (r.status === "fulfilled") {
-          added.push({ url: r.value.secure_url, resourceType: batch[i].type });
+          // Cloudinary sniffs the actual file content — its detected type is
+          // authoritative over the client-side MIME/extension guess.
+          const detected = r.value.resource_type === "video" ? "video"
+            : r.value.resource_type === "image" ? "image"
+            : batch[i].type;
+          added.push({ url: r.value.secure_url, resourceType: detected });
         } else {
           errs.push(`${batch[i].file.name}: ${r.reason?.message || "failed"}`);
         }
@@ -793,7 +799,7 @@ const PosterBoyDashboard = () => {
                 label="Work Pics & Videos"
                 required
                 error={uploadError || errors.workMedia}
-                hint="JPG, PNG, WebP (max 10MB) · MP4, MOV, WebM (max 100MB)"
+                hint="JPG, PNG, WebP (max 10MB) · MP4, WebM, MOV (max 100MB). AVI/MKV files can't play on phones — please upload MP4 instead."
               >
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {form.workMedia.map((m, i) => (
@@ -801,13 +807,13 @@ const PosterBoyDashboard = () => {
                       key={m.url + i}
                       className="relative group aspect-square rounded-lg overflow-hidden border border-border bg-muted"
                     >
-                      {m.resourceType === "video" ? (
+                      {isVideoMedia(m) ? (
                         <ProtectedVideo src={m.url} variant="thumb" className="h-full w-full" />
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={m.url} alt="" className="w-full h-full object-cover" />
                       )}
-                      {m.resourceType === "video" && (
+                      {isVideoMedia(m) && (
                         <span className="absolute bottom-1 left-1 p-1 rounded bg-black/60 text-white">
                           <Video size={12} />
                         </span>
@@ -933,9 +939,9 @@ const PosterBoyDashboard = () => {
           </button>
           {(() => {
             const m = form.workMedia[previewIndex];
-            return m.resourceType === "video" ? (
+            return isVideoMedia(m) ? (
               <div className="w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
-                <ProtectedVideo src={m.url} variant="player" />
+                <VideoPlayer url={m.url} label="Work video preview" />
               </div>
             ) : (
               <div className="relative" onClick={(e) => e.stopPropagation()}>

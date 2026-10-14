@@ -27,6 +27,7 @@ import {
   updateUserApprovalStatus,
 } from "../../services/adminService";
 import BusinessViewDialog from "./BusinessViewDialog";
+import PosterBoyViewDialog from "./PosterBoyViewDialog";
 import TrustScoreDialog from "../../components/admin/TrustScoreDialog";
 import { PageHeader } from "../../components/shared/page-header";
 import { StatusBadge } from "../../components/shared/status-badge";
@@ -91,6 +92,7 @@ const AdminBusinesses = () => {
   const [pendingWorkers, setPendingWorkers] = useState([]);
   const [workerConfirm, setWorkerConfirm] = useState(null);
   const [workerLoading, setWorkerLoading] = useState(false);
+  const [viewWorker, setViewWorker] = useState(null);
   const debounceRef = useRef(null);
 
   const fetchPendingResellers = async () => {
@@ -401,6 +403,15 @@ const AdminBusinesses = () => {
                     <span className="text-xs text-muted-foreground">
                       Status: <StatusBadge status="pending" />
                     </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1"
+                      onClick={() => setViewWorker(w)}
+                    >
+                      <Eye className="h-4 w-4" />
+                      View
+                    </Button>
                     <Button
                       size="sm"
                       className="h-8 gap-1"
@@ -889,15 +900,17 @@ const AdminBusinesses = () => {
               )}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+          <DialogFooter className="flex-row items-center justify-end gap-2 space-x-0">
             <Button
               variant="outline"
+              className="min-w-[96px]"
               onClick={() => setWorkerConfirm(null)}
               disabled={workerLoading}
             >
               Cancel
             </Button>
             <Button
+              className="min-w-[96px]"
               variant={workerConfirm?.action === "approved" ? "default" : "destructive"}
               onClick={handleWorkerAction}
               disabled={workerLoading}
@@ -908,6 +921,25 @@ const AdminBusinesses = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* View Worker Boy Registration Details (vendor-style dialog) */}
+      <PosterBoyViewDialog
+        open={!!viewWorker}
+        onOpenChange={(open) => {
+          if (!open) setViewWorker(null);
+        }}
+        worker={viewWorker}
+        showActions
+        actionLoading={workerLoading}
+        onApprove={(w) => {
+          setWorkerConfirm({ ...w, action: "approved" });
+          setViewWorker(null);
+        }}
+        onReject={(w) => {
+          setWorkerConfirm({ ...w, action: "rejected" });
+          setViewWorker(null);
+        }}
+      />
 
       {/* Delete Dialog */}
       <Dialog

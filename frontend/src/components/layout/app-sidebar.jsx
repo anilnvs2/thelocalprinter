@@ -52,7 +52,7 @@ const navItemsByRole = {
     { to: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/admin/approvals", icon: ClipboardCheck, label: "Approvals", showBadge: true },
     { to: "/admin/vendors", icon: Store, label: "Vendors" },
-    { to: "/admin/posterboys", icon: Megaphone, label: "Poster Boys" },
+    { to: "/admin/posterboys", icon: Megaphone, label: "Poster Boys", showPosterBoyBadge: true },
     { to: "/admin/users", icon: Users, label: "Users" },
     { to: "/admin/businesses", icon: Building2, label: "Businesses", showBusinessBadge: true },
     { to: "/admin/categories", icon: Tag, label: "Categories" },
@@ -83,6 +83,7 @@ export function AppSidebar({
   vendorOnboarding,
   pendingApprovalsCount,
   pendingBusinessesCount = 0,
+  pendingPosterBoysCount = 0,
   unreadChatCount,
   onLogout,
   onNavigate,
@@ -169,6 +170,12 @@ export function AppSidebar({
                   <span className="ml-auto h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
                 )}
                 {item.showBusinessBadge && pendingBusinessesCount > 0 && collapsed && (
+                  <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-red-500 animate-pulse" />
+                )}
+                {item.showPosterBoyBadge && pendingPosterBoysCount > 0 && !collapsed && (
+                  <span className="ml-auto h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+                )}
+                {item.showPosterBoyBadge && pendingPosterBoysCount > 0 && collapsed && (
                   <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-red-500 animate-pulse" />
                 )}
               </Link>

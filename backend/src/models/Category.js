@@ -43,6 +43,13 @@ const categorySchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // Slugs of builtin static subcategories the admin permanently deleted.
+    // Client merges suppress matching static defaults so they stay hidden
+    // instead of reappearing from the builtin list.
+    hiddenSubs: {
+      type: [String],
+      default: [],
+    },
     isActive: {
       type: Boolean,
       default: true,

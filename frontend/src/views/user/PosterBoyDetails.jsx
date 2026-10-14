@@ -23,7 +23,8 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import CopyableId from "../../components/admin/CopyableId";
 import WatermarkLogo from "../../components/media/WatermarkLogo";
-import ProtectedVideo from "../../components/media/ProtectedVideo";
+import { VideoPlayer } from "../../components/media/MediaViewers";
+import { splitWorkMedia, toPlayableVideoUrl } from "../../lib/cloudinary";
 
 /**
  * Public worker boy (poster boy) profile page — the counterpart of the
@@ -70,9 +71,8 @@ const PosterBoyDetails = () => {
 
   const skills = Array.isArray(pb?.skills) ? pb.skills : [];
   const languages = Array.isArray(pb?.languages) ? pb.languages : [];
-  const workMedia = Array.isArray(pb?.workMedia) ? pb.workMedia : [];
-  const workImages = workMedia.filter((m) => m && m.resourceType === "image" && m.url).map((m) => m.url);
-  const workVideos = workMedia.filter((m) => m && m.resourceType === "video" && m.url);
+  const { videos: workVideos, images: workImageObjs } = splitWorkMedia(pb?.workMedia);
+  const workImages = workImageObjs.map((m) => m.url);
   if (workImages.length === 0 && pb?.coverImage) workImages.push(pb.coverImage);
 
   const isGpsVerified = !!(
@@ -326,7 +326,7 @@ const PosterBoyDetails = () => {
                     className="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
                   >
                     <video
-                      src={v.url}
+                      src={toPlayableVideoUrl(v.url)}
                       className="h-full w-full object-cover pointer-events-none"
                       muted
                       playsInline
@@ -411,7 +411,10 @@ const PosterBoyDetails = () => {
               const url = preview.list[preview.index];
               return preview.type === "video" ? (
                 <div className="w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
-                  <ProtectedVideo src={url} variant="player" />
+                  <VideoPlayer
+                    url={url}
+                    label={`Work video ${preview.index + 1} of ${preview.list.length}`}
+                  />
                 </div>
               ) : (
                 <div className="relative" onClick={(e) => e.stopPropagation()}>

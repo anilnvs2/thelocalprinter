@@ -90,7 +90,22 @@ export function mergeCategories(apiCategories) {
     usedApiIds.add(remote._id);
     const remoteServices = Array.isArray(remote.services) ? remote.services : [];
     const remoteNames = new Set(remoteServices.map((s) => norm(s && s.name)));
-    const extraServices = stat.services.filter((s) => !remoteNames.has(norm(s.name)));
+    const remoteSlugs = new Set(remoteServices.map((s) => s && s.slug).filter(Boolean));
+    // Slugs of deactivated DB subs (public API: inactiveSubSlugs) and of
+    // permanently deleted subs (tombstones — public API: hiddenSubSlugs,
+    // admin API: hiddenSubs). Static defaults shadowed by any of these stay
+    // hidden so a deleted subcategory does not reappear from the builtin list.
+    const hiddenSlugs = new Set(
+      [
+        ...(remote.inactiveSubSlugs || []),
+        ...(remote.hiddenSubSlugs || []),
+        ...(remote.hiddenSubs || []),
+        ...remoteSlugs,
+      ].filter(Boolean)
+    );
+    const extraServices = stat.services.filter(
+      (s) => !remoteNames.has(norm(s.name)) && !hiddenSlugs.has(s.slug)
+    );
     return {
       ...stat,
       ...remote,

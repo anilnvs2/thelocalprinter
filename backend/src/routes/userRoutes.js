@@ -71,7 +71,16 @@ router.get("/public/categories", async (req, res) => {
       parentId: { $in: parentIds },
     })
       .sort({ name: 1 })
-      .select("name slug parentId");
+      .select("name slug image parentId");
+
+    // Slugs of deactivated DB subcategories — the client merge uses these to
+    // suppress same-named static defaults so a "deleted" subcategory stays
+    // hidden instead of reappearing from the builtin list.
+    const inactiveSubs = await Category.find({
+      isActive: false,
+      type: "subcategory",
+      parentId: { $in: parentIds },
+    }).select("slug parentId");
 
     const subMap = {};
     subcategories.forEach((sub) => {
@@ -80,9 +89,18 @@ router.get("/public/categories", async (req, res) => {
       subMap[pid].push(sub);
     });
 
+    const hiddenMap = {};
+    inactiveSubs.forEach((sub) => {
+      const pid = sub.parentId.toString();
+      if (!hiddenMap[pid]) hiddenMap[pid] = [];
+      if (sub.slug) hiddenMap[pid].push(sub.slug);
+    });
+
     const result = parentCategories.map((cat) => ({
       ...cat.toObject(),
       services: subMap[cat._id.toString()] || [],
+      inactiveSubSlugs: hiddenMap[cat._id.toString()] || [],
+      hiddenSubSlugs: cat.hiddenSubs || [],
     }));
 
     res.status(200).json({ success: true, data: { categories: result } });

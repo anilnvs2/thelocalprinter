@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Play, Pause, Volume2, VolumeX, Maximize2, Minimize2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, AlertTriangle } from "lucide-react";
 import WatermarkLogo from "./WatermarkLogo";
+import { toAutoVideoUrl } from "../../lib/cloudinary";
 
 const formatTime = (sec) => {
   if (!Number.isFinite(sec) || sec < 0) return "0:00";
@@ -35,6 +36,18 @@ const ProtectedVideo = ({ src, label, variant = "player", className = "", videoC
   const [fullscreen, setFullscreen] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  // Transcoded MP4 first (plays MOV/HEVC uploads), raw file fallback —
+  // without this the browser can't decode them and the player hangs.
+  const autoSrc = useMemo(() => toAutoVideoUrl(src), [src]);
+
+  useEffect(() => {
+    setFailed(false);
+    setPlaying(false);
+    setCurrent(0);
+    setDuration(0);
+  }, [src]);
 
   useEffect(() => {
     const onChange = () => setFullscreen(document.fullscreenElement === wrapRef.current);
@@ -126,7 +139,6 @@ const ProtectedVideo = ({ src, label, variant = "player", className = "", videoC
     >
       <video
         ref={videoRef}
-        src={src}
         playsInline
         preload="metadata"
         draggable={false}
@@ -141,8 +153,26 @@ const ProtectedVideo = ({ src, label, variant = "player", className = "", videoC
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
         className={`block ${videoClass} ${videoClassName}`}
       >
+        <source src={autoSrc} />
+        {/* Error on the LAST source means every source failed. */}
+        <source
+          src={src}
+          onError={() => {
+            setPlaying(false);
+            setFailed(true);
+          }}
+        />
         Your browser does not support the video tag.
       </video>
+
+      {failed && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-1.5 bg-black/85 px-3 text-center">
+          <AlertTriangle className="h-5 w-5 text-amber-400" />
+          <p className="text-[11px] font-medium text-white/90">
+            This video can&apos;t be played here.
+          </p>
+        </div>
+      )}
 
       {!isThumb && <WatermarkLogo position="top-right" size={fullscreen ? "lg" : "sm"} />}
 

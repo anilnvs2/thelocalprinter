@@ -21,7 +21,8 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import CopyableId from "../admin/CopyableId";
 import WatermarkLogo from "../media/WatermarkLogo";
-import ProtectedVideo from "../media/ProtectedVideo";
+import { Play } from "lucide-react";
+import { splitWorkMedia } from "../../lib/cloudinary";
 import { revealPosterBoyContact } from "@/services/userService";
 
 /**
@@ -43,12 +44,8 @@ const PosterBoyCard = ({ posterBoy: p, detailHref }) => {
 
   const skills = Array.isArray(p.skills) ? p.skills : [];
   const languages = Array.isArray(p.languages) ? p.languages : [];
-  const workVideos = (Array.isArray(p.workMedia) ? p.workMedia : []).filter(
-    (m) => m && m.resourceType === "video" && m.url
-  );
-  const workImages = (Array.isArray(p.workMedia) ? p.workMedia : [])
-    .filter((m) => m && m.resourceType === "image" && m.url)
-    .map((m) => m.url);
+  const { videos: workVideos, images: workImageObjs } = splitWorkMedia(p.workMedia);
+  const workImages = workImageObjs.map((m) => m.url);
   if (workImages.length === 0 && p.coverImage) workImages.push(p.coverImage);
 
   const activeIndex = workImages.length ? imgIndex % workImages.length : 0;
@@ -152,12 +149,24 @@ const PosterBoyCard = ({ posterBoy: p, detailHref }) => {
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {workVideos.slice(0, 4).map((v, i) => (
-              <div key={v.url + i} className="w-44 shrink-0">
-                <ProtectedVideo
+              <div
+                key={v.url + i}
+                className="relative w-44 shrink-0 aspect-video overflow-hidden rounded-lg border bg-muted"
+              >
+                {/* Lightweight thumb only — the full ProtectedVideo player
+                    mounts in the profile lightbox. Mounting players inline
+                    here hung the page on undecodable files. */}
+                <video
                   src={v.url}
-                  label={`Work video ${i + 1}`}
-                  className="rounded-lg"
+                  className="h-full w-full object-cover pointer-events-none"
+                  muted
+                  playsInline
+                  preload="metadata"
                 />
+                <span className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none">
+                  <Play size={22} className="text-white" fill="currentColor" />
+                </span>
+                <WatermarkLogo size="sm" />
               </div>
             ))}
           </div>

@@ -85,12 +85,25 @@ const UserWishlist = () => {
                         {b.vendor?.publicId && (
                           <CopyableId id={b.vendor.publicId} />
                         )}
-                        {b.category && (
-                          <div className="flex items-center gap-1.5">
-                            {b.categoryId?.image && (b.categoryId.image.trim().startsWith('<') ? <div className="h-3.5 w-3.5 [&>svg]:w-3.5 [&>svg]:h-3.5" dangerouslySetInnerHTML={{ __html: b.categoryId.image }} /> : <img src={b.categoryId.image} alt="" className="h-3.5 w-3.5 object-contain" />)}
-                            <p className="text-xs font-semibold text-orange-500 uppercase tracking-wide">{b.category}</p>
-                          </div>
-                        )}
+                        {(() => {
+                          const primaryName = b.categoryId?.name || b.category || "";
+                          const extraNames = Array.isArray(b.additionalCategories)
+                            ? b.additionalCategories.map((e) => e?.categoryId?.name).filter(Boolean)
+                            : [];
+                          const names = [...new Set([primaryName, ...extraNames].filter(Boolean))];
+                          if (names.length === 0) return null;
+                          return (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {b.categoryId?.image && (b.categoryId.image.trim().startsWith('<') ? <div className="h-3.5 w-3.5 [&>svg]:w-3.5 [&>svg]:h-3.5" dangerouslySetInnerHTML={{ __html: b.categoryId.image }} /> : <img src={b.categoryId.image} alt="" className="h-3.5 w-3.5 object-contain" />)}
+                              {names.slice(0, 3).map((name) => (
+                                <p key={name} className="text-xs font-semibold text-orange-500 uppercase tracking-wide">{name}</p>
+                              ))}
+                              {names.length > 3 && (
+                                <p className="text-xs font-semibold text-orange-500 uppercase tracking-wide">+{names.length - 3} more</p>
+                              )}
+                            </div>
+                          );
+                        })()}
                         {b.city && (
                           <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                             <MapPin size={12} /> {b.city}

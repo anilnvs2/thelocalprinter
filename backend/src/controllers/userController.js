@@ -27,7 +27,11 @@ exports.getDashboard = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(6)
       .populate("vendor", "publicId")
-      .select("name category city description workingHours serviceType tags vendor contactName verificationMedia.outdoorStoreImage verificationMedia.indoorStoreImage");
+      .populate("categoryId", "name slug image")
+      .populate("serviceIds", "name slug")
+      .populate("additionalCategories.categoryId", "name slug image")
+      .populate("additionalCategories.serviceIds", "name slug")
+      .select("name category categoryId serviceIds additionalCategories city description workingHours serviceType tags vendor contactName verificationMedia.outdoorStoreImage verificationMedia.indoorStoreImage");
 
     const popularCategories = categories.slice(0, 8);
 
@@ -180,9 +184,11 @@ exports.getPublicBusinesses = async (req, res) => {
       allBusinesses = await Business.find(query)
         .populate("categoryId", "name slug image")
         .populate("serviceIds", "name slug")
+        .populate("additionalCategories.categoryId", "name slug image")
+        .populate("additionalCategories.serviceIds", "name slug")
         .populate("vendor", "publicId")
         .select(
-          "name description category categoryId serviceIds city address serviceType customerType orderingMethod orderLimits tags workingHours languages verificationMedia.thumbnailImages verificationMedia.outdoorStoreImage verificationMedia.indoorStoreImage contactName vendor gpsCoordinates brandRecallScore"
+          "name description category categoryId serviceIds additionalCategories city address serviceType customerType orderingMethod orderLimits tags workingHours languages verificationMedia.thumbnailImages verificationMedia.outdoorStoreImage verificationMedia.indoorStoreImage contactName vendor gpsCoordinates brandRecallScore"
         );
     } else {
       const [businesses, total] = await Promise.all([
@@ -192,9 +198,11 @@ exports.getPublicBusinesses = async (req, res) => {
           .limit(limit)
           .populate("categoryId", "name slug image")
           .populate("serviceIds", "name slug")
+          .populate("additionalCategories.categoryId", "name slug image")
+          .populate("additionalCategories.serviceIds", "name slug")
           .populate("vendor", "publicId")
           .select(
-            "name description category categoryId serviceIds city address serviceType customerType orderingMethod orderLimits tags workingHours languages verificationMedia.thumbnailImages verificationMedia.outdoorStoreImage verificationMedia.indoorStoreImage contactName vendor gpsCoordinates brandRecallScore"
+            "name description category categoryId serviceIds additionalCategories city address serviceType customerType orderingMethod orderLimits tags workingHours languages verificationMedia.thumbnailImages verificationMedia.outdoorStoreImage verificationMedia.indoorStoreImage contactName vendor gpsCoordinates brandRecallScore"
           ),
         Business.countDocuments(query),
       ]);
@@ -653,9 +661,15 @@ exports.getWishlist = async (req, res) => {
         .limit(limit)
         .populate({
           path: "business",
-          select: "name category city description serviceType isActive status verificationMedia.thumbnailImages verificationMedia.outdoorStoreImage verificationMedia.indoorStoreImage contactName vendor",
+          select: "name category categoryId serviceIds additionalCategories city description serviceType isActive status verificationMedia.thumbnailImages verificationMedia.outdoorStoreImage verificationMedia.indoorStoreImage contactName vendor",
           match: { isActive: true },
-          populate: { path: "vendor", select: "publicId" },
+          populate: [
+            { path: "vendor", select: "publicId" },
+            { path: "categoryId", select: "name slug image" },
+            { path: "serviceIds", select: "name slug" },
+            { path: "additionalCategories.categoryId", select: "name slug image" },
+            { path: "additionalCategories.serviceIds", select: "name slug" },
+          ],
         }),
       Wishlist.countDocuments({ user: userId }),
     ]);

@@ -111,6 +111,18 @@ export default function CategoryPage({ params }) {
       <div className={`relative overflow-hidden ${isDark ? 'bg-gray-900' : 'bg-gradient-to-br from-brand-navy via-[#1B3654] to-[#112338]'}`}>
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(244,81,22,0.08)_0%,transparent_60%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(244,81,22,0.05)_0%,transparent_50%)]" />
+        {/* Category image as hero background */}
+        {hasImage && !categoryImage.trim().startsWith('<') && (
+          <>
+            <img src={categoryImage} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover opacity-25 pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-b from-[#112338]/60 via-[#112338]/40 to-[#112338]/85 pointer-events-none" />
+          </>
+        )}
+        {hasImage && categoryImage.trim().startsWith('<') && (
+          <div aria-hidden="true" className="absolute inset-0 pointer-events-none hidden md:flex items-center justify-end pr-[4%] opacity-10">
+            <div className="w-[320px] h-[320px] lg:w-[440px] lg:h-[440px] text-white [&>svg]:w-full [&>svg]:h-full" dangerouslySetInnerHTML={{ __html: categoryImage }} />
+          </div>
+        )}
 
         <div className="max-w-screen-xl mx-auto px-4 md:px-6 pt-8 pb-12 md:pt-12 md:pb-16 relative z-10">
           {/* Breadcrumb */}
@@ -229,20 +241,39 @@ export default function CategoryPage({ params }) {
               </span>
             </div>
             <div className="flex flex-wrap gap-3">
-              {subcategories.map((sub) => (
-                <Link
-                  key={sub._id}
-                  href={`/categories/${slug}/${sub.slug}`}
-                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[14px] font-semibold border transition-colors select-none hover:border-brand-orange hover:text-brand-orange ${
-                    isDark
-                      ? 'bg-gray-900 border-gray-800 text-gray-300'
-                      : 'bg-white border-brand-border text-brand-navy shadow-sm'
-                  }`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-brand-orange/60' : 'bg-brand-orange'}`} />
-                  {sub.name}
-                </Link>
-              ))}
+              {subcategories.map((sub) => {
+                const subImage = typeof sub.image === 'string' ? sub.image.trim() : '';
+                return (
+                  <Link
+                    key={sub._id}
+                    href={`/categories/${slug}/${sub.slug}`}
+                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[14px] font-semibold border transition-colors select-none hover:border-brand-orange hover:text-brand-orange ${
+                      isDark
+                        ? 'bg-gray-900 border-gray-800 text-gray-300'
+                        : 'bg-white border-brand-border text-brand-navy shadow-sm'
+                    }`}
+                  >
+                    {subImage ? (
+                      subImage.startsWith('<') ? (
+                        <span
+                          className="h-5 w-5 shrink-0 [&>svg]:w-full [&>svg]:h-full [&>svg]:text-brand-orange"
+                          dangerouslySetInnerHTML={{ __html: subImage }}
+                        />
+                      ) : (
+                        <img
+                          src={subImage}
+                          alt=""
+                          loading="lazy"
+                          className="h-5 w-5 shrink-0 rounded object-contain"
+                        />
+                      )
+                    ) : (
+                      <span className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-brand-orange/60' : 'bg-brand-orange'}`} />
+                    )}
+                    {sub.name}
+                  </Link>
+                );
+              })}
             </div>
           </motion.section>
         )}

@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const Business = require("../models/Business");
 const Category = require("../models/Category");
+const PosterBoyProfile = require("../models/PosterBoyProfile");
 const Settings = require("../models/Settings");
 const ResellerApplication = require("../models/ResellerApplication");
 const { ROLES } = require("../utils/constants");
@@ -1003,7 +1004,7 @@ exports.createCategory = async (req, res) => {
       description: description || "",
       type: categoryType,
       parentId: categoryType === "subcategory" ? parentId : null,
-      image: categoryType === "parent" ? (image || "") : "",
+      image: image || "",
       // Staffing categories list people (Poster Boy), never businesses.
       kind: categoryType === "parent" && kind === "staffing" ? "staffing" : "business",
     });
@@ -1070,6 +1071,10 @@ exports.updateCategory = async (req, res) => {
     }
 
     if (category.type === "parent" && image !== undefined) {
+      category.image = image || "";
+    }
+
+    if (category.type === "subcategory" && image !== undefined) {
       category.image = image || "";
     }
 
@@ -1181,7 +1186,7 @@ exports.deleteCategory = async (req, res) => {
 
 exports.createSubcategory = async (req, res) => {
   try {
-    const { name, parentId } = req.body;
+    const { name, parentId, description, image } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({
@@ -1217,6 +1222,8 @@ exports.createSubcategory = async (req, res) => {
 
     const subcategory = await Category.create({
       name: name.trim(),
+      description: description || "",
+      image: image || "",
       type: "subcategory",
       parentId,
     });
@@ -1243,7 +1250,7 @@ exports.createSubcategory = async (req, res) => {
 exports.updateSubcategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, parentId, description } = req.body;
+    const { name, parentId, description, image, isActive } = req.body;
 
     const subcategory = await Category.findById(id);
     if (!subcategory || subcategory.type !== "subcategory") {
@@ -1282,6 +1289,14 @@ exports.updateSubcategory = async (req, res) => {
       subcategory.description = description;
     }
 
+    if (image !== undefined) {
+      subcategory.image = image || "";
+    }
+
+    if (isActive !== undefined) {
+      subcategory.isActive = !!isActive;
+    }
+
     await subcategory.save();
 
     res.status(200).json({
@@ -1317,12 +1332,22 @@ exports.deleteSubcategory = async (req, res) => {
 
     // Unlink from businesses (serviceIds) and poster-boy profiles (skillIds)
     const PosterBoyProfile = require("../models/PosterBoyProfile");
+    const parentId = subcategory.parentId;
+    const slug = subcategory.slug;
     await Promise.all([
       Business.updateMany({ serviceIds: id }, { $pull: { serviceIds: id } }),
       PosterBoyProfile.updateMany({ skillIds: id }, { $pull: { skillIds: id } }),
     ]);
 
     await Category.findByIdAndDelete(id);
+
+    // Tombstone the slug on the parent: if a builtin static default shares
+    // this slug, the client merge keeps suppressing it so a hard delete can
+    // never resurrect the chip. $addToSet avoids duplicates; harmless when
+    // no static twin exists.
+    if (parentId && slug) {
+      await Category.updateOne({ _id: parentId }, { $addToSet: { hiddenSubs: slug } });
+    }
 
     res.status(200).json({
       success: true,
@@ -1861,7 +1886,7 @@ exports.getBusinessStatusCounts = async (req, res) => {
 
 exports.getPendingApprovalsCount = async (req, res) => {
   try {
-    const [pendingBusinesses, pendingChanges, profileChanges] =
+    const [pendingBusinesses, pendingChanges, profileChanges, posterBoyChanges] =
       await Promise.all([
         Business.countDocuments({ status: "pending" }),
         Business.countDocuments({
@@ -1871,6 +1896,8 @@ exports.getPendingApprovalsCount = async (req, res) => {
           role: ROLES.VENDOR,
           pendingProfileChange: { $ne: null },
         }),
+        // Worker-boy profile edits staged by approved poster boys.
+        PosterBoyProfile.countDocuments({ "pendingChange.data": { $ne: null } }),
       ]);
 
     const total = pendingBusinesses + pendingChanges + profileChanges;
@@ -1882,6 +1909,9 @@ exports.getPendingApprovalsCount = async (req, res) => {
         businesses: pendingBusinesses,
         changes: pendingChanges,
         profileChanges,
+        // Reviewed under the Poster Boys tab, not Approvals — kept out of
+        // `total` so the Approvals badge stays exact.
+        posterBoyChanges,
       },
     });
   } catch (error) {

@@ -63,7 +63,29 @@ const UserBusinessCard = ({
     b.verificationMedia?.outdoorStoreImage ||
     b.verificationMedia?.indoorStoreImage ||
     "";
-  const services = Array.isArray(b.serviceIds) ? b.serviceIds : [];
+  const primaryServices = Array.isArray(b.serviceIds) ? b.serviceIds : [];
+  const additionalCats = Array.isArray(b.additionalCategories)
+    ? b.additionalCategories
+    : [];
+  // Primary + admin-attached additional categories (same as full profile).
+  const primaryCategoryName = b.categoryId?.name || b.category || "";
+  const allCategoryNames = [
+    primaryCategoryName,
+    ...additionalCats
+      .map((e) => e?.categoryId?.name)
+      .filter(Boolean),
+  ].filter(Boolean);
+  const uniqueCategoryNames = [...new Set(allCategoryNames)];
+  // Primary + additional services, de-duplicated by id (same as full profile).
+  const services = [
+    ...primaryServices,
+    ...additionalCats.flatMap((e) =>
+      Array.isArray(e.serviceIds) ? e.serviceIds : []
+    ),
+  ].filter(
+    (s, i, arr) =>
+      arr.findIndex((x) => (x?._id || x) === (s?._id || s)) === i
+  );
   const rating = b.ratingSummary?.averageRating || 0;
   const reviewCount = b.ratingSummary?.reviewCount || 0;
   const isGpsVerified = !!(
@@ -188,8 +210,8 @@ const UserBusinessCard = ({
           </p>
         )}
 
-        {b.category && (
-          <div className="flex items-center gap-1.5">
+        {uniqueCategoryNames.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
             {b.categoryId?.image &&
               (b.categoryId.image.trim().startsWith("<") ? (
                 <div
@@ -203,9 +225,16 @@ const UserBusinessCard = ({
                   className="h-4 w-4 shrink-0 object-contain"
                 />
               ))}
-            <Badge variant="secondary" className="text-[10px]">
-              {b.category}
-            </Badge>
+            {uniqueCategoryNames.slice(0, 3).map((name) => (
+              <Badge key={name} variant="secondary" className="text-[10px]">
+                {name}
+              </Badge>
+            ))}
+            {uniqueCategoryNames.length > 3 && (
+              <Badge variant="secondary" className="text-[10px]">
+                +{uniqueCategoryNames.length - 3} more
+              </Badge>
+            )}
           </div>
         )}
 

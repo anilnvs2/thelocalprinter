@@ -419,6 +419,7 @@ exports.getPosterBoys = async (req, res) => {
               skills: profile.skills,
               languages: profile.languages,
               address: profile.address,
+              city: profile.city || "",
               aadhaarNumber: profile.aadhaarNumber,
               workRadius: profile.workRadius || "",
               strength: profile.strength || "",
@@ -429,6 +430,9 @@ exports.getPosterBoys = async (req, res) => {
               profileCompleted: profile.profileCompleted,
               hasPendingChange: !!(profile.pendingChange && profile.pendingChange.data),
               pendingChangeAt: (profile.pendingChange && profile.pendingChange.submittedAt) || null,
+              // The worker's submitted edits — needed for the admin
+              // before/after review. Null when nothing is pending.
+              pendingChangeData: (profile.pendingChange && profile.pendingChange.data) || null,
               submittedAt: profile.updatedAt,
             }
           : null,

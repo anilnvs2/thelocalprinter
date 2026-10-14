@@ -72,6 +72,98 @@ import {
 const PAGE_SIZE = 10;
 const FETCH_LIMIT = 500;
 
+// Subcategory chip with hover edit/delete actions, so services can be
+// managed straight from the Services column without expanding the row.
+// NOTE: the action buttons always occupy their space (opacity swap only) —
+// showing them with display:none on hover resized the chip and caused the
+// hover vibration/reflow loop.
+const ServiceChip = ({ cat, sub, busy, onEdit, onDelete, onActivate }) => (
+  <span
+    className={`group inline-flex items-center rounded-md border border-transparent bg-secondary text-secondary-foreground transition-colors hover:border-brand-orange/40 hover:bg-brand-orange/10 ${
+      sub.isActive === false ? "opacity-60" : ""
+    }`}
+  >
+    <Link
+      href={`/categories/${cat.slug}/${sub.slug}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`Open /categories/${cat.slug}/${sub.slug}`}
+      className="px-2 py-1 text-xs font-normal hover:text-brand-orange transition-colors"
+    >
+      {sub.name}
+    </Link>
+    <span className="hidden md:inline-flex items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
+      {sub.isActive === false && !sub.isStatic ? (
+        <>
+          <button
+            type="button"
+            title="Activate subcategory"
+            disabled={busy}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onActivate();
+            }}
+            className="flex h-5 w-5 items-center justify-center rounded text-emerald-600 hover:text-emerald-700 transition-colors disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Power className="h-3 w-3" />
+            )}
+          </button>
+          <button
+            type="button"
+            title="Delete permanently"
+            disabled={busy}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="flex h-5 w-5 items-center justify-center rounded text-destructive hover:text-destructive/80 transition-colors disabled:opacity-50"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            title={sub.isStatic ? "Make editable & edit" : "Edit subcategory"}
+            disabled={busy}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onEdit();
+            }}
+            className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-brand-orange transition-colors disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Edit2 className="h-3 w-3" />
+            )}
+          </button>
+          <button
+            type="button"
+            title={sub.isActive === false ? "Delete permanently" : "Disable subcategory"}
+            disabled={busy}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </>
+      )}
+    </span>
+  </span>
+);
+
 const AdminCategories = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -216,7 +308,7 @@ const AdminCategories = () => {
         parentId: cat.parentId?._id || cat.parentId || "",
         parentName: cat.parentId?.name || "",
         parentIsStatic: !!cat.parentId?.isStatic,
-        image: "",
+        image: cat.image || "",
       });
     } else {
       setForm({
@@ -238,8 +330,21 @@ const AdminCategories = () => {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.type !== "image/svg+xml") {
-      setFormError("Only SVG files are allowed");
+    const isSub = editingType === "subcategory";
+    const okTypes = isSub
+      ? ["image/svg+xml", "image/png", "image/jpeg", "image/webp"]
+      : ["image/svg+xml"];
+    if (!okTypes.includes(file.type)) {
+      setFormError(
+        isSub
+          ? "Only SVG, PNG, JPG or WebP images are allowed"
+          : "Only SVG files are allowed"
+      );
+      return;
+    }
+    // Raster images are stored inline (data URL) — keep them small.
+    if (isSub && file.type !== "image/svg+xml" && file.size > 1.5 * 1024 * 1024) {
+      setFormError("Image must be smaller than 1.5MB");
       return;
     }
     const reader = new FileReader();
@@ -303,6 +408,7 @@ const AdminCategories = () => {
             name: form.name.trim(),
             parentId: form.parentId,
             description: form.description,
+            image: form.image,
           });
         } else {
           await updateCategory(editing._id, {
@@ -333,6 +439,7 @@ const AdminCategories = () => {
             await createSubcategory({
               name: name.trim(),
               parentId,
+              image: form.image,
             });
           }
         } else {
@@ -367,20 +474,93 @@ const AdminCategories = () => {
     }
   };
 
+  const normName = (s) => (s || "").trim().toLowerCase();
+
+  // Static (builtin) subcategories have no DB document, so they cannot be
+  // edited/deleted directly. Materializing creates the DB parent (if needed)
+  // plus a real DB subcategory, which the merged list then picks up as the
+  // editable row (DB rows always win over same-named static entries).
+  const ensureDbParent = async (parent) => {
+    const inDb = categories.some((c) => c._id === parent._id);
+    if (inDb) return parent._id;
+    const created = await createCategory({
+      name: parent.name,
+      type: "parent",
+    });
+    const newId = created?.data?.category?._id;
+    if (!newId) throw new Error("Could not prepare parent category");
+    return newId;
+  };
+
+  const materializeStaticSub = async (parent, sub) => {
+    const parentId = await ensureDbParent(parent);
+    const fresh = await getCategories(1, "", FETCH_LIMIT);
+    const cats = fresh?.data?.categories || [];
+    setCategories(cats);
+    const dbParent = cats.find((c) => c._id === parentId);
+    const existing = (dbParent?.services || []).find(
+      (s) => normName(s.name) === normName(sub.name)
+    );
+    if (existing) return { parentId, sub: existing };
+    const created = await createSubcategory({
+      name: sub.name.trim(),
+      parentId,
+    });
+    const dbSub = created?.data?.category;
+    if (!dbSub?._id) throw new Error("Could not prepare subcategory");
+    return { parentId, sub: dbSub };
+  };
+
+  const handleEditStaticSub = async (parent, sub) => {
+    try {
+      setActionLoading(sub._id);
+      setError("");
+      const { sub: dbSub } = await materializeStaticSub(parent, sub);
+      openEdit(dbSub, "subcategory");
+    } catch (err) {
+      setError(
+        err.response?.data?.message || err.message || "Failed to prepare subcategory for editing"
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Two-step delete rule:
+  //   1st delete → disable (deactivate). The row stays as a dimmed inactive
+  //   row with Activate + Delete actions.
+  //   2nd delete (on a disabled row) → permanent hard delete. The backend
+  //   tombstones the slug on the parent, so even a builtin static default by
+  //   the same name stays suppressed and can never resurrect the chip.
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     try {
       setDeleteLoading(true);
       setError("");
       if (deleteType === "subcategory") {
-        await deleteSubcategory(deleteTarget._id);
+        if (deleteTarget._isStatic) {
+          // Static default: materialize, then deactivate so the merged list
+          // (admin + public) suppresses it everywhere. It stays recoverable
+          // via Activate on its dimmed row.
+          const { sub: dbSub } = await materializeStaticSub(
+            deleteTarget._parent,
+            deleteTarget
+          );
+          await updateSubcategory(dbSub._id, { isActive: false });
+        } else if (deleteTarget.isActive === false) {
+          // 2nd delete on a disabled row → permanent.
+          await deleteSubcategory(deleteTarget._id);
+        } else {
+          // 1st delete → disable only.
+          await updateSubcategory(deleteTarget._id, { isActive: false });
+        }
       } else {
         await deleteCategory(deleteTarget._id);
       }
       setDeleteTarget(null);
       fetchCategories(1, "");
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete");
+      setError(err.response?.data?.message || err.message || "Failed to delete");
     } finally {
       setDeleteLoading(false);
     }
@@ -466,6 +646,7 @@ const AdminCategories = () => {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
+                            title={expandedRows[cat._id] ? "Collapse subcategories" : "Expand to manage subcategories"}
                             onClick={() => toggleRow(cat._id)}
                           >
                             {expandedRows[cat._id] ? (
@@ -509,17 +690,26 @@ const AdminCategories = () => {
                               {cat.services && cat.services.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mt-1 md:hidden">
                                   {cat.services.map((sub) => (
-                                    <Link
+                                    <ServiceChip
                                       key={sub._id}
-                                      href={`/categories/${cat.slug}/${sub.slug}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      title={`Open /categories/${cat.slug}/${sub.slug}`}
-                                    >
-                                      <Badge variant="secondary" className="text-xs font-normal hover:bg-brand-orange/15 hover:text-brand-orange transition-colors">
-                                        {sub.name}
-                                      </Badge>
-                                    </Link>
+                                      cat={cat}
+                                      sub={sub}
+                                      busy={actionLoading === sub._id}
+                                      onActivate={() => handleToggle(sub._id)}
+                                      onEdit={() =>
+                                        sub.isStatic
+                                          ? handleEditStaticSub(cat, sub)
+                                          : openEdit(sub, "subcategory")
+                                      }
+                                      onDelete={() => {
+                                        setDeleteTarget(
+                                          sub.isStatic
+                                            ? { ...sub, _isStatic: true, _parent: cat }
+                                            : { ...sub, _parent: cat }
+                                        );
+                                        setDeleteType("subcategory");
+                                      }}
+                                    />
                                   ))}
                                 </div>
                               )}
@@ -530,17 +720,26 @@ const AdminCategories = () => {
                           <div className="flex flex-wrap gap-1">
                             {cat.services && cat.services.length > 0 ? (
                               cat.services.map((sub) => (
-                                <Link
+                                <ServiceChip
                                   key={sub._id}
-                                  href={`/categories/${cat.slug}/${sub.slug}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  title={`Open /categories/${cat.slug}/${sub.slug}`}
-                                >
-                                  <Badge variant="secondary" className="text-xs font-normal hover:bg-brand-orange/15 hover:text-brand-orange transition-colors">
-                                    {sub.name}
-                                  </Badge>
-                                </Link>
+                                  cat={cat}
+                                  sub={sub}
+                                  busy={actionLoading === sub._id}
+                                  onActivate={() => handleToggle(sub._id)}
+                                  onEdit={() =>
+                                    sub.isStatic
+                                      ? handleEditStaticSub(cat, sub)
+                                      : openEdit(sub, "subcategory")
+                                  }
+                                  onDelete={() => {
+                                    setDeleteTarget(
+                                      sub.isStatic
+                                        ? { ...sub, _isStatic: true, _parent: cat }
+                                        : { ...sub, _parent: cat }
+                                    );
+                                    setDeleteType("subcategory");
+                                  }}
+                                />
                               ))
                             ) : (
                               <span className="text-muted-foreground text-sm">—</span>
@@ -669,11 +868,22 @@ const AdminCategories = () => {
                       {expandedRows[cat._id] &&
                         cat.services &&
                         cat.services.map((sub) => (
-                          <TableRow key={sub._id} className="bg-muted/30">
+                          <TableRow
+                            key={sub._id}
+                            className={`bg-muted/30 ${sub.isActive === false ? "opacity-60" : ""}`}
+                          >
                             <TableCell></TableCell>
                             <TableCell>
                               <div className="pl-6 flex items-center gap-2 min-w-0">
-                                <div className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground/30" />
+                                {sub.image ? (
+                                  sub.image.trim().startsWith('<') ? (
+                                    <div className="h-6 w-6 shrink-0 rounded border object-contain bg-muted p-0.5 [&>svg]:w-full [&>svg]:h-full" dangerouslySetInnerHTML={{ __html: sub.image }} />
+                                  ) : (
+                                    <img src={sub.image} alt={sub.name} className="h-6 w-6 shrink-0 rounded border object-cover bg-muted" />
+                                  )
+                                ) : (
+                                  <div className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground/30" />
+                                )}
                                 <Link
                                   href={`/categories/${cat.slug}/${sub.slug}`}
                                   target="_blank"
@@ -683,6 +893,11 @@ const AdminCategories = () => {
                                 >
                                   {sub.name}
                                 </Link>
+                                {sub.isStatic && (
+                                  <Badge variant="outline" className="text-[10px] shrink-0">
+                                    Default
+                                  </Badge>
+                                )}
                               </div>
                             </TableCell>
                             <TableCell className="hidden md:table-cell"></TableCell>
@@ -706,34 +921,73 @@ const AdminCategories = () => {
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center justify-end gap-0.5">
-                                {!sub.isStatic && (
+                                {sub.isActive === false && !sub.isStatic ? (
                                   <>
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-8 w-8"
-                                      title="Edit subcategory"
-                                      onClick={() => openEdit(sub, "subcategory")}
+                                      className="h-8 w-8 text-emerald-600 hover:text-emerald-700"
+                                      title="Activate subcategory"
+                                      disabled={actionLoading === sub._id}
+                                      onClick={() => handleToggle(sub._id)}
                                     >
-                                      <Edit2 className="h-4 w-4" />
+                                      {actionLoading === sub._id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Power className="h-4 w-4" />
+                                      )}
                                     </Button>
                                     <Button
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8 text-destructive hover:text-destructive"
-                                      title="Delete subcategory"
+                                      title="Delete permanently"
                                       disabled={actionLoading === sub._id}
                                       onClick={() => {
-                                        setDeleteTarget(sub);
+                                        setDeleteTarget({ ...sub, _parent: cat });
                                         setDeleteType("subcategory");
                                       }}
                                     >
-                                      {actionLoading === sub._id ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <Trash2 className="h-4 w-4" />
-                                      )}
+                                      <Trash2 className="h-4 w-4" />
                                     </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  title={sub.isStatic ? "Make editable & edit subcategory" : "Edit subcategory"}
+                                  disabled={actionLoading === sub._id}
+                                  onClick={() =>
+                                    sub.isStatic
+                                      ? handleEditStaticSub(cat, sub)
+                                      : openEdit(sub, "subcategory")
+                                  }
+                                >
+                                  {actionLoading === sub._id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Edit2 className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  title="Disable subcategory"
+                                  disabled={actionLoading === sub._id}
+                                  onClick={() => {
+                                    setDeleteTarget(
+                                      sub.isStatic
+                                        ? { ...sub, _isStatic: true, _parent: cat }
+                                        : { ...sub, _parent: cat }
+                                    );
+                                    setDeleteType("subcategory");
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                                   </>
                                 )}
                                 <DropdownMenu>
@@ -767,26 +1021,46 @@ const AdminCategories = () => {
                                         Open Public Page
                                       </Link>
                                     </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        sub.isStatic
+                                          ? handleEditStaticSub(cat, sub)
+                                          : openEdit(sub, "subcategory")
+                                      }
+                                      disabled={actionLoading === sub._id}
+                                    >
+                                      <Edit2 className="mr-2 h-4 w-4" />
+                                      {sub.isStatic ? "Make Editable" : "Edit"}
+                                    </DropdownMenuItem>
                                     {!sub.isStatic && (
-                                      <>
-                                        <DropdownMenuItem onClick={() => openEdit(sub, "subcategory")}>
-                                          <Edit2 className="mr-2 h-4 w-4" />
-                                          Edit
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem
-                                          className="text-destructive focus:text-destructive"
-                                          onClick={() => {
-                                            setDeleteTarget(sub);
-                                            setDeleteType("subcategory");
-                                          }}
-                                          disabled={actionLoading === sub._id}
-                                        >
-                                          <Trash2 className="mr-2 h-4 w-4" />
-                                          Delete
-                                        </DropdownMenuItem>
-                                      </>
+                                      <DropdownMenuItem
+                                        onClick={() => handleToggle(sub._id)}
+                                        disabled={actionLoading === sub._id}
+                                      >
+                                        {actionLoading === sub._id ? (
+                                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <Power className="mr-2 h-4 w-4" />
+                                        )}
+                                        {sub.isActive ? "Deactivate" : "Activate"}
+                                      </DropdownMenuItem>
                                     )}
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={() => {
+                                        setDeleteTarget(
+                                          sub.isStatic
+                                            ? { ...sub, _isStatic: true, _parent: cat }
+                                            : { ...sub, _parent: cat }
+                                        );
+                                        setDeleteType("subcategory");
+                                      }}
+                                      disabled={actionLoading === sub._id}
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               </div>
@@ -835,6 +1109,7 @@ const AdminCategories = () => {
         if (!open) {
           setShowForm(false);
           setSubcategoryNames([""]);
+          removeImage();
         }
       }}>
         <DialogContent className="max-w-md">
@@ -995,14 +1270,22 @@ const AdminCategories = () => {
               </div>
             )}
 
-            {editingType === "parent" && (
+            {(editingType === "parent" || editingType === "subcategory") && (
               <div className="space-y-2">
-                <Label htmlFor="cat-image">Category Image (SVG)</Label>
+                <Label htmlFor="cat-image">
+                  {editingType === "parent"
+                    ? "Category Image (SVG)"
+                    : "Subcategory Image (SVG, PNG, JPG, WebP)"}
+                </Label>
                 <div className="flex items-center gap-3">
                   <Input
                     id="cat-image"
                     type="file"
-                    accept=".svg,image/svg+xml"
+                    accept={
+                      editingType === "parent"
+                        ? ".svg,image/svg+xml"
+                        : ".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp"
+                    }
                     onChange={handleImageUpload}
                     ref={fileInputRef}
                     className="flex-1"
@@ -1019,6 +1302,18 @@ const AdminCategories = () => {
                     </Button>
                   )}
                 </div>
+                {editingType === "subcategory" && !editing && (
+                  <p className="text-xs text-muted-foreground">
+                    Applied to every subcategory created in this batch. Edit a
+                    subcategory later to give it its own image.
+                  </p>
+                )}
+                {editingType === "subcategory" && editing && (
+                  <p className="text-xs text-muted-foreground">
+                    Shown on the subcategory hero background. SVG icons render
+                    faint, photos render as a cover.
+                  </p>
+                )}
                 {form.image && (
                   form.image.trim().startsWith('<') ? (
                     <div className="h-16 w-16 rounded border object-contain bg-muted mt-2 p-2 [&>svg]:w-full [&>svg]:h-full" dangerouslySetInnerHTML={{ __html: form.image }} />
@@ -1061,11 +1356,24 @@ const AdminCategories = () => {
               Delete {deleteType === "subcategory" ? "Subcategory" : "Category"}
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <strong>{deleteTarget?.name}</strong>?
-              {deleteType === "parent" &&
-                " This will also delete all subcategories under it."}{" "}
-              Businesses and poster boys using it will be unlinked. This action
-              cannot be undone.
+              {deleteType === "subcategory" &&
+              !deleteTarget?._isStatic &&
+              deleteTarget?.isActive === false ? (
+                <>
+                  Permanently delete <strong>{deleteTarget?.name}</strong>? It
+                  will be removed everywhere and cannot be restored. Businesses
+                  and poster boys using it will be unlinked.
+                </>
+              ) : (
+                <>
+                  Are you sure you want to delete <strong>{deleteTarget?.name}</strong>?
+                  {deleteType === "parent" &&
+                    " This will also delete all subcategories under it."}{" "}
+                  {deleteType === "subcategory"
+                    ? "It will be disabled (hidden everywhere) and can be re-activated later from its dimmed row."
+                    : "Businesses and poster boys using it will be unlinked. This action cannot be undone."}
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1090,7 +1398,7 @@ const AdminCategories = () => {
 
       {/* View Category Dialog */}
       <Dialog open={!!viewTarget} onOpenChange={(open) => !open && setViewTarget(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Category Details</DialogTitle>
           </DialogHeader>
@@ -1131,7 +1439,7 @@ const AdminCategories = () => {
             {viewTarget?.services && viewTarget.services.length > 0 && (
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Services / Subcategories</p>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto pr-1">
                   {viewTarget.services.map((sub) => (
                     <Badge key={sub._id} variant="secondary">{sub.name}</Badge>
                   ))}
