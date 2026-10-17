@@ -19,11 +19,12 @@ const app = express();
 app.use(helmet());
 app.use(morgan("dev"));
 app.use(cors({ origin: function (origin, callback) {
-  const allowed = (process.env.CLIENT_URL || "").split(",").map(s => s.trim());
+  const allowed = (process.env.CLIENT_URL || "").split(",").map(s => s.trim()).filter(Boolean);
   if (!origin || allowed.includes(origin)) {
     callback(null, true);
   } else {
-    callback(null, true);
+    console.warn(`[CORS] Blocked request from disallowed origin: ${origin}`);
+    callback(null, false);
   }
 }, credentials: true }));
 app.use(express.json({ limit: "10mb" }));
