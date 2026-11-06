@@ -6,42 +6,52 @@ const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const { ROLES } = require("../utils/constants");
 
+// Run from backend/:  npm run seed:admin
+// Override:           npm run seed:admin -- --email "..." --password "..."
+// Admin credentials live here, not in .env.
+const DEFAULT_ADMIN_EMAIL = "admin@localprinter.com";
+const DEFAULT_ADMIN_PASSWORD = "@TheLocalPrinter@Anil123";
+const DEFAULT_ADMIN_NAME = "Admin";
+
+const getArgValue = (flag) => {
+  const i = process.argv.indexOf(flag);
+  return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : null;
+};
+
 const seedAdmin = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log("MongoDB connected for seeding");
 
-    const { ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
-
-    if (!ADMIN_EMAIL || !ADMIN_PASSWORD || !ADMIN_NAME) {
-      console.error(
-        "Error: ADMIN_NAME, ADMIN_EMAIL, and ADMIN_PASSWORD must be set in .env"
-      );
-      process.exit(1);
-    }
-
-    const existing = await User.findOne({ email: ADMIN_EMAIL.toLowerCase() });
-    if (existing) {
-      console.log("Admin user already exists. Skipping.");
-      process.exit(0);
-    }
+    const email = (getArgValue("--email") || DEFAULT_ADMIN_EMAIL).toLowerCase();
+    const name = DEFAULT_ADMIN_NAME;
+    const password = getArgValue("--password") || DEFAULT_ADMIN_PASSWORD;
 
     const salt = await bcrypt.genSalt(12);
-    const hash = await bcrypt.hash(ADMIN_PASSWORD, salt);
+    const hash = await bcrypt.hash(password, salt);
 
-    const admin = new User({
-      fullName: ADMIN_NAME,
-      email: ADMIN_EMAIL,
-      passwordHash: hash,
-      role: ROLES.ADMIN,
-      isActive: true,
-    });
-    await admin.save();
+    const existing = await User.findOne({ email });
 
-    console.log(`Admin created: ${admin.email} (ID: ${admin._id})`);
-    process.exit(0);
+    if (existing) {
+      await User.updateOne(
+        { _id: existing._id },
+        { $set: { passwordHash: hash, role: ROLES.ADMIN, isActive: true } }
+      );
+      console.log(`Admin password reset for: ${email}`);
+    } else {
+      await User.create({
+        fullName: name,
+        email,
+        passwordHash: hash,
+        role: ROLES.ADMIN,
+        isActive: true,
+      });
+      console.log(`Admin created: ${email}`);
+    }
+
+    console.log(`Email: ${email} (password set from script / --password arg)`);
+    await mongoose.disconnect();
   } catch (error) {
-    console.error("Seeding error:", error.message);
+    console.error("Admin seed error:", error.message);
     process.exit(1);
   }
 };

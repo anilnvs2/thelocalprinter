@@ -1280,6 +1280,13 @@ exports.updateSubcategory = async (req, res) => {
       });
     }
 
+    // Capture before the mutation: if the doc ends up with a different slug
+    // (the pre-save hook regenerates it on rename) or a different parent, the
+    // in-DB unlinking would let a builtin static default with the old name's
+    // slug resurface from the client merge — tombstone it (see delete).
+    const oldSlug = subcategory.slug;
+    const oldParentId = subcategory.parentId ? String(subcategory.parentId) : null;
+
     if (parentId) {
       const parent = await Category.findById(parentId);
       if (!parent || parent.type !== "parent") {
@@ -1318,6 +1325,16 @@ exports.updateSubcategory = async (req, res) => {
     }
 
     await subcategory.save();
+
+    // Rename/move orphaned the old slug: tombstone it on the parent it used
+    // to live under, so the builtin list merge keeps the old default hidden
+    // whether it belongs to the same parent or the one the row left.
+    if (oldSlug && (oldSlug !== subcategory.slug || String(subcategory.parentId) !== oldParentId)) {
+      await Category.updateOne(
+        { _id: oldParentId || subcategory.parentId },
+        { $addToSet: { hiddenSubs: oldSlug } }
+      );
+    }
 
     res.status(200).json({
       success: true,

@@ -98,9 +98,13 @@ export default function CategoryDetail({ content }) {
   const router = useRouter();
   const { isDark, toggle } = useLPTheme();
   const [dbItems, setDbItems] = useState([]);
+  const [suppressedSlugs, setSuppressedSlugs] = useState([]);
 
   // Subcategories an admin adds later live in the API only — append them so
   // this guide page keeps matching what the category actually offers.
+  // Builtin `content.items` that were disabled or permanently deleted from
+  // the DB are suppressed the same way: the public API reports their slugs
+  // as inactiveSubSlugs (deactivated) / hiddenSubSlugs (tombstoned).
   useEffect(() => {
     if (content.type === 'comparison') return undefined;
     let alive = true;
@@ -115,6 +119,11 @@ export default function CategoryDetail({ content }) {
             .map((s) => s.name)
             .filter((n) => n && !existing.has(slugify(n)))
         );
+        setSuppressedSlugs([
+          ...(parent.inactiveSubSlugs || []),
+          ...(parent.hiddenSubSlugs || []),
+          ...(parent.hiddenSubs || []),
+        ].filter(Boolean));
       })
       .catch(() => {});
     return () => {
@@ -207,7 +216,9 @@ export default function CategoryDetail({ content }) {
       );
     }
 
-    const items = [...(content.items || []), ...dbItems];
+    const items = [...(content.items || []), ...dbItems].filter(
+      (item) => !suppressedSlugs.includes(slugify(item))
+    );
     return (
       <Reveal>
         <div className="flex flex-wrap gap-2.5">

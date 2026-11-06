@@ -426,11 +426,7 @@ const AdminCategories = () => {
           let parentId = form.parentId;
           const parentInDb = categories.some((c) => c._id === form.parentId);
           if (!parentInDb) {
-            const created = await createCategory({
-              name: form.parentName,
-              type: "parent",
-            });
-            parentId = created?.data?.category?._id;
+            parentId = await findDbParentId(form.parentName, "");
             if (!parentId) {
               throw new Error("Could not prepare parent category");
             }
@@ -476,32 +472,72 @@ const AdminCategories = () => {
 
   const normName = (s) => (s || "").trim().toLowerCase();
 
-  // Static (builtin) subcategories have no DB document, so they cannot be
-  // edited/deleted directly. Materializing creates the DB parent (if needed)
-  // plus a real DB subcategory, which the merged list then picks up as the
-  // editable row (DB rows always win over same-named static entries).
-  const ensureDbParent = async (parent) => {
-    const inDb = categories.some((c) => c._id === parent._id);
-    if (inDb) return parent._id;
-    const created = await createCategory({
-      name: parent.name,
-      type: "parent",
-    });
-    const newId = created?.data?.category?._id;
-    if (!newId) throw new Error("Could not prepare parent category");
-    return newId;
-  };
-
-  const materializeStaticSub = async (parent, sub) => {
-    const parentId = await ensureDbParent(parent);
+  // Core categories live in code until materialized; when the admin list shows
+  // a static row (pseudo _id) the DB may already hold a same-named document —
+  // the merge pairs them by NAME. Resolve the real DB parentId, creating the
+  // parent document when none exists.
+  const findDbParentId = async (name, knownId = "") => {
+    if (knownId && categories.some((c) => c._id === knownId)) return knownId;
+    const local = categories.find((c) => normName(c.name) === normName(name));
+    if (local?._id) return local._id;
+    try {
+      const created = await createCategory({
+        name,
+        type: "parent",
+      });
+      const newId = created?.data?.category?._id;
+      if (newId) return newId;
+    } catch {
+      // The name may have been taken in the meantime — fall through to a
+      // fresh lookup before giving up.
+    }
     const fresh = await getCategories(1, "", FETCH_LIMIT);
     const cats = fresh?.data?.categories || [];
     setCategories(cats);
-    const dbParent = cats.find((c) => c._id === parentId);
-    const existing = (dbParent?.services || []).find(
-      (s) => normName(s.name) === normName(sub.name)
+    const parent = cats.find((c) => normName(c.name) === normName(name));
+    if (parent?._id) return parent._id;
+    // Category names are unique across ALL documents: if only a SUBCATEGORY
+    // holds the name, no parent can be created until it is renamed.
+    const twin = cats
+      .flatMap((c) => (c.services || []).map((s) => ({ ...s, _parentName: c.name })))
+      .find((s) => normName(s.name) === normName(name));
+    if (twin) {
+      throw new Error(
+        `A subcategory named "${twin.name}" already exists under ${twin._parentName} — rename it first`
+      );
+    }
+    throw new Error("Could not prepare parent category");
+  };
+
+  // Materialize creates the DB parent (if needed) plus a real DB subcategory,
+  // which the merged list then picks up as the editable row (DB rows always
+  // win over same-named static entries).
+  const materializeStaticSub = async (parent, sub) => {
+    const parentId = await findDbParentId(parent.name, parent._id);
+    const fresh = await getCategories(1, "", FETCH_LIMIT);
+    const cats = fresh?.data?.categories || [];
+    setCategories(cats);
+    const normSub = normName(sub.name);
+    // Already materialized under this parent.
+    const sameParentHit = (cats.find((c) => c._id === parentId)?.services || []).find(
+      (s) => normName(s.name) === normSub
     );
-    if (existing) return { parentId, sub: existing };
+    if (sameParentHit) return { parentId, sub: sameParentHit };
+    // Names are unique across ALL categories — reuse a sub the same name
+    // under another parent instead of failing (the edit dialog lets it be
+    // renamed or moved to this parent).
+    const reuse = cats
+      .filter((c) => c._id !== parentId)
+      .flatMap((c) => c.services || [])
+      .find((s) => normName(s.name) === normSub);
+    if (reuse) return { parentId, sub: reuse };
+    // A parent-level document using the name blocks sub creation entirely.
+    const blocking = cats.find((c) => normName(c.name) === normSub);
+    if (blocking) {
+      throw new Error(
+        `A category named "${blocking.name}" already exists — rename it before making this subcategory editable`
+      );
+    }
     const created = await createSubcategory({
       name: sub.name.trim(),
       parentId,
