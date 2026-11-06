@@ -496,12 +496,14 @@ export default function Header() {
           </nav>
 
           <div className="flex items-center gap-2 lg:hidden pointer-events-auto">
-            <Link 
-             href="/search"
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              aria-label="Open menu"
               className="w-9 h-9 flex items-center justify-center rounded-full  text-black shadow-sm hover:bg-[#D84A06] transition-colors"
             >
               <MapPin className="w-5 h-5" />
-            </Link>
+            </button>
             <button 
               className="p-1.5 text-brand-navy hover:text-brand-orange transition-colors"
               onClick={() => setIsMobileMenuOpen(true)}
