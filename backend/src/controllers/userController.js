@@ -912,9 +912,30 @@ exports.getPublicPosterBoys = async (req, res) => {
     const query = { status: "approved", profileCompleted: true };
 
     if (serviceId) {
-      query.skillIds = { $in: [serviceId] };
+      // Match the resolved skill link, plus a name fallback for legacy profiles
+      // that predate skillIds and only stored the skill label as free text.
+      const service = await Category.findById(serviceId).select("name").lean();
+      const skillOr = [{ skillIds: { $in: [serviceId] } }];
+      if (service && service.name) {
+        skillOr.push({
+          skills: { $regex: `^${escapeRegex(service.name)}$`, $options: "i" },
+        });
+      }
+      query.$and = query.$and || [];
+      query.$and.push({ $or: skillOr });
     } else if (categoryId) {
-      query.categoryId = categoryId;
+      // A staffing category (e.g. "Poster Boy") is the pool that lists every
+      // worker boy — the category link is only a denormalized hint. Profiles
+      // saved before categoryId/skillIds existed carry a null (or stale) link,
+      // so filtering on it would hide them from a category-name search. Such
+      // categories therefore list the whole pool; real business categories
+      // (never served here) keep the strict link.
+      const category = await Category.findById(categoryId)
+        .select("kind")
+        .lean();
+      if (!(category && category.kind === "staffing")) {
+        query.categoryId = categoryId;
+      }
     }
     // Same locality rule as businesses: ANY token may match city/address.
     // Skipped when geo-filtering (radius decides), kept as fallback for
