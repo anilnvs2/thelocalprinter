@@ -46,6 +46,7 @@ const {
 const {
   getPosterBoys,
   adminUpdateProfileStatus,
+  adminUpdatePosterBoy,
 } = require("../controllers/posterBoyController");
 
 const router = express.Router();
@@ -82,6 +83,7 @@ router.get("/approvals", getPendingApprovals);
 router.get("/approvals/count", getPendingApprovalsCount);
 
 router.get("/poster-boys", getPosterBoys);
+router.put("/poster-boys/:id", adminUpdatePosterBoy);
 router.patch("/poster-boys/:id/profile-status", adminUpdateProfileStatus);
 
 router.get("/categories", getCategories);

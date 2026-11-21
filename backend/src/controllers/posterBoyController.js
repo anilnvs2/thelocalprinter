@@ -367,6 +367,130 @@ exports.adminUpdateProfileStatus = async (req, res) => {
   }
 };
 
+// PUT /api/admin/poster-boys/:id   (ADMIN)
+// Admin edits win immediately: live profile fields are overwritten and any
+// worker-submitted pending change is discarded.
+exports.adminUpdatePosterBoy = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Poster boy not found" });
+    }
+    if (user.role !== "POSTER_BOY") {
+      return res.status(400).json({ success: false, message: "User is not a poster boy" });
+    }
+
+    const userUpdate = {};
+    if (body.fullName !== undefined) {
+      const fullName = String(body.fullName).trim();
+      if (fullName.length < 2) {
+        return res.status(400).json({ success: false, message: "Full name must be at least 2 characters" });
+      }
+      userUpdate.fullName = fullName;
+    }
+    if (body.email !== undefined) userUpdate.email = String(body.email).trim().toLowerCase();
+    if (body.phone !== undefined) userUpdate.phone = body.phone ? String(body.phone).trim() : null;
+    if (body.whatsappNumber !== undefined) {
+      userUpdate.whatsappNumber = body.whatsappNumber ? String(body.whatsappNumber).trim() : null;
+    }
+
+    let updatedUser = user;
+    if (Object.keys(userUpdate).length > 0) {
+      updatedUser = await User.findByIdAndUpdate(id, userUpdate, {
+        new: true,
+        runValidators: true,
+      });
+    }
+
+    const rawProfile = body.profile || null;
+    let profile = await PosterBoyProfile.findOne({ user: user._id });
+
+    if (rawProfile) {
+      const source = (field) => (rawProfile[field] !== undefined ? rawProfile[field] : profile?.[field]);
+      const data = sanitizeProfileData({
+        aadhaarNumber: source("aadhaarNumber"),
+        languages: source("languages"),
+        address: source("address"),
+        city: source("city"),
+        gpsCoordinates: source("gpsCoordinates"),
+        skills: source("skills"),
+        workRadius: source("workRadius"),
+        strength: source("strength"),
+        orderAccepted: source("orderAccepted"),
+        bookingTimeline: source("bookingTimeline"),
+        workTiming: source("workTiming"),
+        workMedia: source("workMedia"),
+      });
+      const { errors, skills, languages, workMedia } = validateProfile(data);
+      if (Object.keys(errors).length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation failed",
+          errors: Object.entries(errors).map(([field, message]) => ({ field, message })),
+        });
+      }
+
+      const payload = buildPayload(data, skills, languages, workMedia);
+      payload.city = data.city || deriveCityFromAddress(data.address);
+      const { categoryId, skillMap } = await getPosterBoyCategoryRefs();
+      payload.categoryId = categoryId;
+      payload.skillIds = resolveSkillIds(skills, skillMap);
+
+      if (!profile) {
+        profile = new PosterBoyProfile({
+          user: user._id,
+          ...payload,
+          status: "approved",
+          profileCompleted: true,
+        });
+      } else {
+        PROFILE_FIELDS.forEach((field) => {
+          profile[field] = payload[field];
+        });
+        profile.profileCompleted = true;
+        // Admin edits replace the live profile, so a staged worker change is
+        // no longer relevant.
+        profile.pendingChange = null;
+      }
+      await profile.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Poster boy updated successfully",
+      data: {
+        user: {
+          _id: updatedUser._id,
+          fullName: updatedUser.fullName,
+          email: updatedUser.email,
+          phone: updatedUser.phone || null,
+          whatsappNumber: updatedUser.whatsappNumber || null,
+          publicId: updatedUser.publicId || null,
+          approvalStatus: updatedUser.approvalStatus,
+          isActive: updatedUser.isActive,
+          createdAt: updatedUser.createdAt,
+        },
+        profile: shapeProfile(profile),
+      },
+    });
+  } catch (error) {
+    if (error && error.code === 11000) {
+      return res.status(400).json({ success: false, message: "Email already in use" });
+    }
+    if (error && error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: Object.values(error.errors).map((e) => e.message).join(", "),
+      });
+    }
+    console.error("Admin update poster boy error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 // GET /api/admin/poster-boys   (ADMIN)
 exports.getPosterBoys = async (req, res) => {
   try {

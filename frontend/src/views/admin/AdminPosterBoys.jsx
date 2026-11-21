@@ -11,6 +11,7 @@ import {
   Megaphone,
   CheckCircle,
   XCircle,
+  Pencil,
 } from "lucide-react";
 import {
   getPosterBoys,
@@ -31,6 +32,7 @@ import PosterBoyViewDialog, {
   computeProfileChanges,
   humanizeChangeKey,
 } from "./PosterBoyViewDialog";
+import PosterBoyEditDialog from "./PosterBoyEditDialog";
 import {
   Table,
   TableBody,
@@ -68,6 +70,7 @@ const AdminPosterBoys = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [viewTarget, setViewTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
   const [accountConfirm, setAccountConfirm] = useState(null);
   const [profileConfirm, setProfileConfirm] = useState(null);
   const [actionLoading2, setActionLoading2] = useState(false);
@@ -492,6 +495,10 @@ const AdminPosterBoys = () => {
                               <Eye className="mr-2 h-4 w-4" />
                               View Profile
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setEditTarget(v)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit Details
+                            </DropdownMenuItem>
 
                             {v.approvalStatus !== "approved" && (
                               <>
@@ -660,6 +667,18 @@ const AdminPosterBoys = () => {
             pending: w.profile.hasPendingChange,
           });
           setViewTarget(null);
+        }}
+      />
+
+      {/* Edit */}
+      <PosterBoyEditDialog
+        open={!!editTarget}
+        onOpenChange={(open) => { if (!open) setEditTarget(null); }}
+        worker={editTarget}
+        onSaved={(updated) => {
+          setItems((prev) => prev.map((v) => (v._id === updated._id ? { ...v, ...updated } : v)));
+          setViewTarget((prev) => (prev && prev._id === updated._id ? { ...prev, ...updated } : prev));
+          setEditTarget(null);
         }}
       />
 

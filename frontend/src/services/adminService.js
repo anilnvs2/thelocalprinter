@@ -142,6 +142,11 @@ export const getPosterBoys = async (page = 1, search = "", accountStatus = "") =
   return response.data;
 };
 
+export const adminUpdatePosterBoy = async (id, data) => {
+  const response = await api.put(`/admin/poster-boys/${id}`, data);
+  return response.data;
+};
+
 export const updatePosterBoyProfileStatus = async (id, status) => {
   const response = await api.patch(`/admin/poster-boys/${id}/profile-status`, {
     status,
