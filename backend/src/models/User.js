@@ -12,6 +12,26 @@ const pendingProfileChangeSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const subscriptionSchema = new mongoose.Schema(
+  {
+    planId: { type: String, default: null },
+    planLabel: { type: String, default: null },
+    durationDays: { type: Number, default: 0 },
+    amount: { type: Number, default: 0 },
+    status: {
+      type: String,
+      enum: ["active", "expired", "cancelled", null],
+      default: null,
+    },
+    startDate: { type: Date, default: null },
+    endDate: { type: Date, default: null },
+    orderId: { type: String, default: null },
+    paymentId: { type: String, default: null },
+    paymentStatus: { type: String, default: null },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     fullName: {
@@ -102,6 +122,24 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    subscription: {
+      type: subscriptionSchema,
+      default: null,
+    },
+    // Only accounts created after the trial feature launches are eligible.
+    // Existing accounts have this as false, so they get no trial.
+    trialEligible: {
+      type: Boolean,
+      default: false,
+    },
+    trialStartedAt: {
+      type: Date,
+      default: null,
+    },
+    trialEndsAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -113,7 +151,10 @@ userSchema.virtual("password").set(function (plainPassword) {
 });
 
 userSchema.pre("validate", function () {
-  if (!this._plainPassword && !this.passwordHash) {
+  // Only new accounts must bring a password. passwordHash is select:false,
+  // so an existing user loaded from the DB never has it in memory — checking
+  // it here would make every later save() of that user fail validation.
+  if (this.isNew && !this._plainPassword && !this.passwordHash) {
     this.invalidate("password", "Password is required");
   }
 });

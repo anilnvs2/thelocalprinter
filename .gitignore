@@ -21,3 +21,6 @@ backend/uploads/
 # Dev logs
 dev-log*.txt
 devlog.txt
+
+# Frontend local env (no secrets, local dev only)
+.env.local

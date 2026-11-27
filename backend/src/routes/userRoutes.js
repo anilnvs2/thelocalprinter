@@ -1,5 +1,6 @@
 const express = require("express");
 const { authenticateUser, authorizeRole } = require("../middlewares/auth");
+const { requireActiveSubscription } = require("../middlewares/subscription");
 const {
   getDashboard,
   getPublicBusinesses,
@@ -28,7 +29,13 @@ const {
 const router = express.Router();
 
 router.get("/dashboard", authenticateUser, authorizeRole("USER"), getDashboard);
-router.get("/businesses", authenticateUser, authorizeRole("USER"), getPublicBusinesses);
+router.get(
+  "/businesses",
+  authenticateUser,
+  authorizeRole("USER"),
+  requireActiveSubscription,
+  getPublicBusinesses
+);
 router.get("/businesses/filters", authenticateUser, authorizeRole("USER"), getFilterOptions);
 router.get("/businesses/:id", authenticateUser, authorizeRole("USER"), getBusinessById);
 
@@ -49,12 +56,16 @@ router.get("/package", authenticateUser, authorizeRole("USER"), getPackage);
 const Category = require("../models/Category");
 
 router.get("/public/locations/autocomplete", getLocationAutocomplete);
-router.get("/public/businesses", getPublicBusinesses);
+router.get("/public/businesses", requireActiveSubscription, getPublicBusinesses);
 router.get("/public/businesses/filters", getFilterOptions);
 router.get("/public/businesses/:id", getBusinessById);
 router.get("/public/businesses/:businessId/reviews", getPublicBusinessReviews);
 
-router.get("/public/poster-boys", getPublicPosterBoys);
+router.get(
+  "/public/poster-boys",
+  requireActiveSubscription,
+  getPublicPosterBoys
+);
 router.get("/public/poster-boys/:id", getPublicPosterBoyById);
 router.post("/public/poster-boys/:id/contact", revealPosterBoyContact);
 

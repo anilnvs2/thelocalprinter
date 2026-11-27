@@ -8,6 +8,10 @@ const ResellerApplication = require("../models/ResellerApplication");
 const { ROLES } = require("../utils/constants");
 const { applyBusinessPatch } = require("../utils/businessPatch");
 const { validatePrintShopSelection } = require("../utils/businessValidation");
+const {
+  PLAN_DEFS,
+  getDefaultPlanValue,
+} = require("../utils/subscriptionPlans");
 
 // ─── Dashboard ───
 
@@ -1444,6 +1448,12 @@ const DEFAULT_SETTINGS = [
   { key: "user_subscription_duration_days", value: 30, category: "subscription", description: "User subscription duration in days" },
   { key: "user_trial_period_days", value: 0, category: "subscription", description: "User free trial period in days (0 = no trial)" },
   { key: "user_package_benefits", value: [], category: "subscription", description: "List of user package benefit points" },
+  ...PLAN_DEFS.map((def) => ({
+    key: def.key,
+    value: getDefaultPlanValue(def),
+    category: "subscription",
+    description: `${def.label} search subscription plan (price + benefits)`,
+  })),
   { key: "business_approval_required", value: true, category: "platform", description: "Require admin approval for new businesses" },
   { key: "vendor_approval_required", value: false, category: "platform", description: "Require admin approval for new vendors" },
   { key: "user_registration_enabled", value: true, category: "platform", description: "Allow new user registrations" },
@@ -1459,12 +1469,25 @@ exports.getSettings = async (req, res) => {
       query.category = category;
     }
 
-    let settings = await Settings.find(query).sort({ category: 1, key: 1 });
+    // Ensure newly-added default settings (e.g. subscription plans) exist
+    // without overwriting values the admin has already customized.
+    await Settings.bulkWrite(
+      DEFAULT_SETTINGS.map((s) => ({
+        updateOne: {
+          filter: { key: s.key },
+          update: {
+            $setOnInsert: {
+              value: s.value,
+              category: s.category,
+              description: s.description,
+            },
+          },
+          upsert: true,
+        },
+      }))
+    );
 
-    if (settings.length === 0) {
-      await Settings.insertMany(DEFAULT_SETTINGS);
-      settings = await Settings.find(query).sort({ category: 1, key: 1 });
-    }
+    let settings = await Settings.find(query).sort({ category: 1, key: 1 });
 
     const grouped = { general: [], subscription: [], platform: [] };
     settings.forEach((s) => {

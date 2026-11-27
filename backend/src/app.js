@@ -12,6 +12,7 @@ const posterBoyRoutes = require("./routes/posterBoyRoutes");
 const userRoutes = require("./routes/userRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const chatRoutes = require("./routes/chatRoutes");
+const subscriptionRoutes = require("./routes/subscriptionRoutes");
 const { adminCouponRoutes, couponRoutes } = require("./routes/couponRoutes");
 
 const app = express();
@@ -40,6 +41,7 @@ app.use("/api/posterboy", posterBoyRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/admin/coupons", adminCouponRoutes);
 app.use("/api/coupons", couponRoutes);
 

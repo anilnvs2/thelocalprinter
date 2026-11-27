@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
@@ -16,8 +16,15 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [redirectParam, setRedirectParam] = useState("");
   const { login, checkVendorOnboarding } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const target = new URLSearchParams(window.location.search).get("redirect");
+    if (target && target.startsWith("/")) setRedirectParam(target);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -26,7 +33,9 @@ const Login = () => {
     setLoading(true);
     try {
       const user = await login(email, password);
-      if (user.role === "VENDOR") {
+      if (redirectParam && user.role !== "ADMIN") {
+        router.push(redirectParam);
+      } else if (user.role === "VENDOR") {
         const onboarding = await checkVendorOnboarding();
         if (!onboarding || !onboarding.hasBusiness) router.push("/vendor/businesses/new");
         else if (onboarding.firstBusinessStatus === "pending") router.push("/vendor/pending");
@@ -149,7 +158,7 @@ const Login = () => {
 
           <p className="text-center mt-6 text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
-            <Link href="/signup" className="text-orange-600 dark:text-orange-400 font-semibold hover:underline transition-colors">Sign Up</Link>
+            <Link href={redirectParam ? `/signup?redirect=${encodeURIComponent(redirectParam)}` : "/signup"} className="text-orange-600 dark:text-orange-400 font-semibold hover:underline transition-colors">Sign Up</Link>
           </p>
         </div>
       </div>

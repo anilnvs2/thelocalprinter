@@ -1,4 +1,8 @@
 const express = require("express");
+const crypto = require("crypto");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const { body } = require("express-validator");
 const { signup, login, getMe } = require("../controllers/authController");
 const { sendOtp, verifyOtp, checkOtpVerified } = require("../controllers/otpController");
@@ -6,6 +10,36 @@ const { authenticateUser } = require("../middlewares/auth");
 const { resellerUpload } = require("../middlewares/upload");
 
 const router = express.Router();
+
+// TEMP DIAGNOSTIC — captures what the browser actually sends to /login.
+// Delete this block and the router hook below once the login issue is resolved.
+const loginDebug = (req, res, next) => {
+  const startedAt = new Date().toISOString();
+  res.on("finish", () => {
+    try {
+      const pw = typeof req.body?.password === "string" ? req.body.password : "";
+      const rawEmail = typeof req.body?.email === "string" ? req.body.email : null;
+      fs.appendFileSync(
+        path.join(os.tmpdir(), "lp-login-debug.log"),
+        JSON.stringify({
+          t: startedAt,
+          status: res.statusCode,
+          origin: req.headers.origin || null,
+          referer: req.headers.referer || null,
+          emailRaw: rawEmail,
+          emailHex: rawEmail ? Buffer.from(rawEmail, "utf8").toString("hex") : null,
+          pwLen: pw.length,
+          pwEdgeWS: pw !== pw.trim(),
+          pwSha: crypto.createHash("sha256").update(pw, "utf8").digest("hex").slice(0, 16),
+          pwTrimSha: crypto.createHash("sha256").update(pw.trim(), "utf8").digest("hex").slice(0, 16),
+        }) + "\n"
+      );
+    } catch (e) {
+      // never break login because of logging
+    }
+  });
+  next();
+};
 
 const sendOtpValidation = [
   body("email")
@@ -106,7 +140,7 @@ const normalizeSignupEmail = (req, res, next) => {
 
 router.post("/signup", resellerUpload, normalizeSignupEmail, [whatsappValidation], signup);
 router.post("/signup-json", signupValidation, signup);
-router.post("/login", loginValidation, login);
+router.post("/login", loginDebug, loginValidation, login);
 router.get("/me", authenticateUser, getMe);
 
 module.exports = router;

@@ -7,6 +7,7 @@ import gsap from 'gsap';
 import { usePathname, useRouter } from 'next/navigation'; 
 import { Menu, X, MapPin, Search, Crosshair, Loader2, LogOut, LayoutDashboard, ChevronDown, ChevronRight, Heart, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import TrialCountdown from '@/components/subscription/TrialCountdown';
 import { getActiveCategories, getWishlist, getPublicFilterOptions, getLocationAutocomplete } from '@/services/userService';
 import { mergeCategories } from '@/data/vendorCategories';
 import {
@@ -394,7 +395,7 @@ export default function Header() {
         ref={headerRef}
         className="fixed top-4 left-0 w-full z-40 px-4 md:px-6 flex justify-center pointer-events-none"
       >
-        <div className="pointer-events-auto w-full h-[65px] max-w-screen-xl mx-auto px-4 lg:px-6 rounded-2xl bg-white/75 backdrop-blur-md shadow-lg border border-brand-border/50 flex items-center justify-between gap-8 transition-all">
+        <div className="pointer-events-auto w-full h-[65px] max-w-screen-xl mx-auto px-4 lg:px-6 rounded-2xl bg-white/75 backdrop-blur-md shadow-lg border border-brand-border/50 flex items-center justify-between gap-3 lg:gap-8 transition-all">
           
           <Link href="/" className="shrink-0">
             <div className="flex items-center gap-2.5">
@@ -446,6 +447,7 @@ export default function Header() {
 
             {!loading && (
               <>
+                <TrialCountdown className="ml-1" />
                 {!user ? (
                   <Link 
                     href="/login" 
@@ -496,6 +498,7 @@ export default function Header() {
           </nav>
 
           <div className="flex items-center gap-2 lg:hidden pointer-events-auto">
+            <TrialCountdown />
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(true)}

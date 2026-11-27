@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import UserBusinessCard from '@/components/user/UserBusinessCard';
 import PosterBoyCard from '@/components/user/PosterBoyCard';
+import SearchSubscriptionGate from '@/components/subscription/SearchSubscriptionGate';
 import { searchPublicBusinesses, getPublicFilterOptions, getLocationAutocomplete, getPublicPosterBoys, getActiveCategories } from '@/services/userService';
 import { getSavedCity, clearLocation, onSavedLocationChange } from '@/lib/savedLocation';
 import { businessHref } from '@/lib/utils';
@@ -632,7 +633,9 @@ function SearchContent() {
 export default function SearchPage() {
   return (
     <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center"><div className="animate-pulse text-gray-400">Loading search...</div></div>}>
-      <SearchContent />
+      <SearchSubscriptionGate>
+        <SearchContent />
+      </SearchSubscriptionGate>
     </Suspense>
   );
 }

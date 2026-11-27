@@ -4,6 +4,7 @@ const User = require("../models/User");
 const OtpVerification = require("../models/OtpVerification");
 const Business = require("../models/Business");
 const { ROLES } = require("../utils/constants");
+const { ensureTrialStarted } = require("../utils/trial");
 
 const generateToken = (userId, role) => {
   return jwt.sign({ userId, role }, process.env.JWT_SECRET, {
@@ -93,6 +94,8 @@ exports.signup = async (req, res) => {
       // admin approval. Poster boys, however, are approved by the admin before
       // they can access their dashboard.
       approvalStatus: role === ROLES.POSTER_BOY ? "pending" : "approved",
+      // New accounts get a one-day free trial, started on first login/use.
+      trialEligible: true,
     };
 
     const { generatePublicId } = require("../utils/publicId");
@@ -222,7 +225,13 @@ exports.login = async (req, res) => {
       });
     }
 
-    const isMatch = await user.comparePassword(password);
+    // Compare the password as typed first; if that fails, retry without any
+    // leading/trailing whitespace so a stray space from copy/paste still works.
+    const candidate = typeof password === "string" ? password : "";
+    let isMatch = await user.comparePassword(candidate);
+    if (!isMatch && candidate.trim() !== candidate) {
+      isMatch = await user.comparePassword(candidate.trim());
+    }
     if (!isMatch) {
       return res.status(401).json({
         success: false,
@@ -264,6 +273,9 @@ exports.login = async (req, res) => {
       });
     }
 
+    // Start the one-day free trial on the account's first login.
+    await ensureTrialStarted(user);
+
     const token = generateToken(user._id, user.role);
 
     res.status(200).json({
@@ -291,6 +303,9 @@ exports.getMe = async (req, res) => {
         message: "User not found",
       });
     }
+
+    // Covers accounts that were auto-logged-in at signup (no login call yet).
+    await ensureTrialStarted(user);
 
     res.status(200).json({
       success: true,

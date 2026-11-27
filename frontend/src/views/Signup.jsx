@@ -48,6 +48,12 @@ const Signup = () => {
   const { signup, refreshUser } = useAuth();
   const router = useRouter();
 
+  const getRedirect = () => {
+    if (typeof window === "undefined") return null;
+    const target = new URLSearchParams(window.location.search).get("redirect");
+    return target && target.startsWith("/") ? target : null;
+  };
+
   const [businessForm, setBusinessForm] = useState({ companyName: "", location: "", businessCategory: "", contactNumber: "", officialEmail: "", gstNumber: "", paymentRule: [] });
   const [resellerForm, setResellerForm] = useState({ companyName: "", address: "", businessCategory: "", contactNumber: "", gstNumber: "", yearlyTurnover: "" });
   const [locationVideo, setLocationVideo] = useState(null);
@@ -168,11 +174,11 @@ const Signup = () => {
         if (locationVideo) fd.append("locationVideo", locationVideo);
         if (businessCard) fd.append("businessCard", businessCard);
         const res = await api.post("/auth/signup", fd, { headers: { "Content-Type": "multipart/form-data" } });
-        const { token: t } = res.data.data; localStorage.setItem("token", t); await refreshUser(); router.push("/user/dashboard/wishlist");
+        const { token: t } = res.data.data; localStorage.setItem("token", t); await refreshUser(); router.push(getRedirect() || "/user/dashboard/wishlist");
         return;
       }
       await signup(fullName.trim(), email.toLowerCase().trim(), password, "USER", payload);
-      router.push("/user/dashboard/wishlist");
+      router.push(getRedirect() || "/user/dashboard/wishlist");
     } catch (err) { setServerError(err.response?.data?.message || "Registration failed. Please try again."); }
     finally { setLoading(false); }
   };

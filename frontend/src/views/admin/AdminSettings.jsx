@@ -13,6 +13,7 @@ import {
   X,
   Pencil,
   Trash2,
+  CalendarDays,
 } from "lucide-react";
 import { getSettings, updateSettings } from "../../services/adminService";
 import { PageLoader } from "../../components/shared/page-loader";
@@ -171,6 +172,45 @@ const PackageBenefits = ({ benefits = [], onChange }) => {
   );
 };
 
+const SearchPlanCard = ({ title, durationDays, value, onChange }) => {
+  const price = Number(value?.price) || 0;
+  const benefits = Array.isArray(value?.benefits) ? value.benefits : [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-primary" />
+          <CardTitle className="text-base">{title}</CardTitle>
+        </div>
+        <CardDescription>Search access for {durationDays} days.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label>Price</Label>
+          <div className="relative max-w-xs">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              &#8377;
+            </span>
+            <Input
+              type="number"
+              min="0"
+              className="pl-7"
+              value={price}
+              onChange={(e) => onChange({ price: Number(e.target.value) })}
+            />
+          </div>
+        </div>
+        <Separator />
+        <PackageBenefits
+          benefits={benefits}
+          onChange={(val) => onChange({ benefits: val })}
+        />
+      </CardContent>
+    </Card>
+  );
+};
+
 const AdminSettings = () => {
   const [settings, setSettings] = useState({ general: [], subscription: [], platform: [] });
   const [loading, setLoading] = useState(true);
@@ -196,12 +236,16 @@ const AdminSettings = () => {
   }, []);
 
   const handleChange = (category, key, value) => {
-    setSettings((prev) => ({
-      ...prev,
-      [category]: prev[category].map((s) =>
-        s.key === key ? { ...s, value } : s
-      ),
-    }));
+    setSettings((prev) => {
+      const list = prev[category] || [];
+      const exists = list.some((s) => s.key === key);
+      return {
+        ...prev,
+        [category]: exists
+          ? list.map((s) => (s.key === key ? { ...s, value } : s))
+          : [...list, { key, value, category }],
+      };
+    });
   };
 
   const handleSave = async () => {
@@ -232,6 +276,27 @@ const AdminSettings = () => {
   const getSettingDescription = (category, key) => {
     const setting = settings[category]?.find((s) => s.key === key);
     return setting?.description;
+  };
+
+  const getPlanValue = (key, fallbackLabel) => {
+    const value = getSettingValue("subscription", key);
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return {
+        price: Number(value.price) || 0,
+        benefits: Array.isArray(value.benefits) ? value.benefits : [],
+        label: value.label || fallbackLabel,
+      };
+    }
+    return {
+      price: typeof value === "number" ? value : 0,
+      benefits: [],
+      label: fallbackLabel,
+    };
+  };
+
+  const updatePlanValue = (key, fallbackLabel, patch) => {
+    const current = getPlanValue(key, fallbackLabel);
+    handleChange("subscription", key, { ...current, ...patch });
   };
 
   if (loading) return <PageLoader text="Loading settings..." />;
@@ -373,6 +438,7 @@ const AdminSettings = () => {
             <TabsList>
               <TabsTrigger value="user">User Subscription</TabsTrigger>
               <TabsTrigger value="vendor">Vendor Subscription</TabsTrigger>
+              <TabsTrigger value="search-plans">Search Plans</TabsTrigger>
             </TabsList>
 
             {/* User Subscription */}
@@ -540,6 +606,42 @@ const AdminSettings = () => {
 
               <div className="mt-6">
                 <CouponList type="VENDOR" />
+              </div>
+            </TabsContent>
+
+            {/* Search Subscription Plans (1 / 3 / 12 months) */}
+            <TabsContent value="search-plans">
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Search Subscription Plans</CardTitle>
+                    <CardDescription>
+                      These three plans unlock the search page for users, vendors,
+                      and poster boys. Pricing and benefits apply to all roles.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <SearchPlanCard
+                    title="1 Month"
+                    durationDays={30}
+                    value={getPlanValue("plan_1_month", "1 Month")}
+                    onChange={(patch) => updatePlanValue("plan_1_month", "1 Month", patch)}
+                  />
+                  <SearchPlanCard
+                    title="3 Months"
+                    durationDays={90}
+                    value={getPlanValue("plan_3_months", "3 Months")}
+                    onChange={(patch) => updatePlanValue("plan_3_months", "3 Months", patch)}
+                  />
+                  <SearchPlanCard
+                    title="12 Months"
+                    durationDays={365}
+                    value={getPlanValue("plan_12_months", "12 Months")}
+                    onChange={(patch) => updatePlanValue("plan_12_months", "12 Months", patch)}
+                  />
+                </div>
               </div>
             </TabsContent>
           </Tabs>
